@@ -1,0 +1,35 @@
+{{define "header" -}}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UDESA - Evaluador de Python</title>
+    <link rel="icon" type="image/x-icon" href="/assets/img/favicon.png">
+    <link rel="stylesheet" href="{{assetPath "css/jquery-linedtextarea.css"}}">
+    <link rel="stylesheet" href="{{ assetPath "css/bootstrap.min.css" }}">
+    <script src="https://code.jquery.com/jquery.js"></script>
+    <script src="{{ assetPath "js/bootstrap.js" }}"></script>
+    <link defer rel="stylesheet" src="https://www.jqueryscript.net/css/jquerysctipttop.css">
+</head>
+<body>
+    <div class="topnav">
+        <a href="/" class="active">Evaluador de Python</a>
+        <form action="/qap/search">
+            <input type="text" name="Query" placeholder="Search..">
+        </form>
+    </div>
+    <main>
+{{end}}
+
+{{define "footer"}}
+  </main>
+  <footer>
+    <p>
+      Copyright 2022 - upsya
+    </p>
+    <p>
+      See source: <a href="https://github.com/soypat/upsya">github.com/soypat/upsya</a>. soypat/upsya is licensed under the <strong>MIT License</strong>.
+    </p>
+  </footer>
+</body>
+</html>
+{{end}}

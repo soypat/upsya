@@ -1,0 +1,107 @@
+{{ template "header"}}
+
+<form id="interpreter" method="POST" enctype="multipart/form-data">
+    <!--csrf()-->
+    {{if gt .EvaluationID 0 }}
+    <input name="evalid" value="{{ .EvaluationID }}" type="hidden">
+    {{ end }}
+    <div class="container">
+        <div class="row" id="banner">
+            <div class="col-4" id="head" itemprop="name">
+                    <button id="run" class="btn btn-primary btn-lg p-1 px-2">Run</button>
+           </div>
+            <div class="col-0">Interpretador</div>
+            <div class="col-5" id="user">Usuario X</div>
+            <div class="col-3" id="elapsed"></div>
+        </div>
+        <div id="wrap" class="row">
+        <textarea itemprop="description" rows="16" class="lined col-sm-12"  id="code" name="Code"
+              autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="false">print("hello world!")</textarea>
+        </div>
+        <div class="row" id="wrap">
+            <textarea class="lined col-sm-12" rows="10" id="output" disabled></textarea>
+        </div>
+    </div>
+</form>
+
+<script src="{{ assetPath "js/jquery-linedtextarea.js" }}"></script>
+<script defer>
+$('#code').linedtextarea();
+runID = document.querySelector("#run");
+codeID = document.querySelector("#code");
+outputID = document.querySelector("#output");
+elapsedID = document.querySelector("#elapsed");
+codeID.setAttribute("wrap","off")
+outputID.setAttribute("wrap","off")
+$(`.linedwrap`).attr("class","linedtextarea")
+
+function extractLineNo(stringy) {
+    let cap = /line (\d+)/g.exec(stringy)
+    if (cap == null || cap.length < 2) {
+        return -1
+    }
+    let ln = parseInt(cap[1]);
+    if (!(ln > 0) || !(ln < 1000)) {
+        return -1
+    }
+    return ln
+}
+
+function formToObject($form){
+    var unindexed_array = $form.serializeArray();
+    var indexed_array = {};
+    $.map(unindexed_array, function(n, i){
+        indexed_array[n['name']] = n['value'];
+    });
+    return indexed_array;
+}
+
+$("#interpreter").submit(function(e){
+    $(`.codelines > div.lineselect`).attr("class", "lineno")
+    elapsedID.innerHTML = ""
+    e.preventDefault();
+    let form = JSON.stringify(formToObject($(this)))
+    $.ajax({
+        url: '/py/eval',
+        method: 'POST',
+        data: form,
+        dataType: 'json',
+        success: onResponse,
+        error: function(data){ //error function
+            console.log("error: ",data)
+        }
+    });
+});
+
+function onResponse(rjson) {
+    if (rjson.Error !== "" && rjson.Error !== undefined) {
+        outputID.setAttribute("style", "color:red;");
+        rjson.Output = rjson.Output === "" ? rjson.Error :  rjson.Error + "\n\nOutput:\n" + rjson.Output ;
+        num = extractLineNo(rjson.Output);
+        $(`.codelines > div:nth-of-type(${num})`).attr("class", "lineno lineselect")
+    } else {
+        outputID.setAttribute("style", "");
+        elapsedID.innerHTML = ( Math.ceil( parseInt(rjson.Elapsed) / 1e6) ).toString() + "ms"
+    }
+    outputID.innerHTML = rjson.Output.replace("File ", "Error on");
+}
+
+$(document).delegate('#code', 'keydown', function (e) {
+    var keyCode = e.keyCode || e.which;
+    if (keyCode == 9) {
+        e.preventDefault();
+        var start = this.selectionStart;
+        var end = this.selectionEnd;
+        var tab = `   `
+        // set textarea value to: text before caret + tab + text after caret
+        $(this).val($(this).val().substring(0, start)
+            + tab
+            + $(this).val().substring(end));
+        // put caret at right position again
+        this.selectionStart =
+            this.selectionEnd = start + tab.length;
+    }
+});
+</script>
+
+{{ template "footer"}}
