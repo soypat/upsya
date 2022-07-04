@@ -7,7 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/russross/blackfriday/v2"
 )
+
+const debug = true
 
 var (
 	//go:embed assets
@@ -33,15 +38,22 @@ func run() error {
 	if python == "" {
 		return errors.New("PYTHON3 env variable not set. must be python executable location or command name. i.e. \"python3\".")
 	}
-	eval := cmdRunna(python)
+	evaluator := Evaluator{
+		tmpls:  tmpl,
+		runner: cmdRunna(python),
+	}
+	err = evaluator.ParseAndEvaluateGlob("evaluations/*.py")
+	if err != nil {
+		return err
+	}
 	smux.Handle("/assets/", http.FileServer(http.FS(assetFS)))
-	smux.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
-		err := tmpl.Lookup("eval.tmpl").Execute(rw, struct{ EvaluationID int }{EvaluationID: 1})
-		if err != nil {
-			log.Println("error in landing:", err)
-		}
+	smux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/py/evals", http.StatusTemporaryRedirect)
 	})
-	smux.HandleFunc("/py/eval", eval.handleEvalRequest)
+	smux.HandleFunc("/py/evals", evaluator.handleListEvaluations)
+	// smux.HandleFunc("/py/evals", evaluator.handleEvaluation)
+
+	smux.HandleFunc("/py/run/", evaluator.handleRun)
 	sv := userMiddleware(smux)
 	addr := ":8080"
 	log.Println("Server started at http://127.0.0.1" + addr)
@@ -49,5 +61,12 @@ func run() error {
 }
 
 var funcmap = template.FuncMap{
-	"assetPath": func(asset string) string { return "assets/" + asset },
+	"assetPath": func(asset string) string { return "/assets/" + asset },
+	"safe":      func(html string) template.HTML { return template.HTML(html) },
+	"markdown": func(input string) template.HTML {
+		result := blackfriday.Run([]byte(input))
+		p := bluemonday.UGCPolicy()
+		output := p.Sanitize(string(result))
+		return template.HTML(output)
+	},
 }

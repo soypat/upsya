@@ -1,9 +1,11 @@
-{{ template "header"}}
-
+{{/* 
+    Optionally receives an Evaluation as first and only argument.
+*/}}
+{{ define "interpreter" -}}
 <form id="interpreter" method="POST" enctype="multipart/form-data">
     <!--csrf()-->
-    {{if gt .EvaluationID 0 }}
-    <input name="evalid" value="{{ .EvaluationID }}" type="hidden">
+    {{if .Title }}
+    <input name="EvaluationID" value="{{ $.ID }}" type="hidden">
     {{ end }}
     <div class="container">
         <div class="row" id="banner">
@@ -62,7 +64,7 @@ $("#interpreter").submit(function(e){
     e.preventDefault();
     let form = JSON.stringify(formToObject($(this)))
     $.ajax({
-        url: '/py/eval',
+        url: '/py/run/',
         method: 'POST',
         data: form,
         dataType: 'json',
@@ -103,5 +105,4 @@ $(document).delegate('#code', 'keydown', function (e) {
     }
 });
 </script>
-
-{{ template "footer"}}
+{{- end}}

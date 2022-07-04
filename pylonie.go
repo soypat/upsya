@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,19 +37,30 @@ func cmdRunna(command string) pyRunna {
 	}
 }
 
-func (p *pyRunna) handleEvalRequest(rw http.ResponseWriter, r *http.Request) {
+type evaluationJob struct {
+	eval     Evaluation
+	filename string
+	// case status 0: did not run, -2: program error, -1: incorrect result, 1: correct result.
+	status  []int
+	outputs []string
+	Output  string
+	Elapsed time.Duration
+	Error   string
+}
+
+func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
+	log.Println("handle run start")
 	type pyUserInput struct {
 		Code         string
-		EvaluationID int
+		EvaluationID string
 	}
 	type pyResult struct {
 		Output  string
 		Elapsed time.Duration
 		Error   string
 	}
-
 	var src pyUserInput
-	rd := io.LimitReader(r.Body, 600) // 600Bytes read max
+	rd := io.LimitReader(r.Body, 5000) // 600Bytes read max
 	err := json.NewDecoder(rd).Decode(&src)
 	if err != nil {
 		httpErr(rw, "", err, http.StatusBadRequest)
@@ -70,9 +84,28 @@ func (p *pyRunna) handleEvalRequest(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
 		return
 	}
+	log.Println("handling run")
+	eid, _ := strconv.Atoi(src.EvaluationID)
+	if eid > 0 {
+		// Find evaluation if this is an evaluation.
+		for _, ev := range p.evals {
+			if ev.ID() == int64(eid) {
+				ej := evaluationJob{
+					eval:     ev,
+					filename: fpath,
+				}
+				p.evaluate(r.Context(), &ej)
+				json.NewEncoder(rw).Encode(ej)
+				return
+			}
+		}
+		httpErr(rw, "evaluation not found", nil, http.StatusBadRequest)
+		return
+	}
+	// Below is regular interpreter logic.
 	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
 	defer cancel()
-	cmd, err := p.eval(ctx, fpath)
+	cmd, err := p.runner.eval(ctx, fpath)
 	if err != nil {
 		httpErr(rw, "preparing program command", err, http.StatusInternalServerError)
 		return
@@ -90,4 +123,62 @@ func (p *pyRunna) handleEvalRequest(rw http.ResponseWriter, r *http.Request) {
 		})(err),
 	}
 	json.NewEncoder(rw).Encode(result)
+}
+
+func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
+	cases := strings.Split(job.eval.Stdin, "---")
+	job.status = make([]int, len(cases))
+	job.outputs = make([]string, len(cases))
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	setJob := func(output string, err error) {
+		job.Output = output
+		job.Elapsed = time.Since(start)
+		if err != nil {
+			job.Error = err.Error()
+		}
+	}
+	defer cancel()
+	correct := 0
+	comparison := "\"ours\"\n\"theirs\"\n\n"
+	for i := range cases {
+		cmd, err := ev.runner.eval(ctx, job.filename)
+		if err != nil {
+			return err
+		}
+		cmd.Stdin = strings.NewReader(cases[i])
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		output, err := cmd.CombinedOutput()
+		// special case for 1 empty test input
+		if len(cases) == 1 && cases[0] == "" {
+			setJob(string(output), err)
+			return nil
+		}
+		if err != nil {
+			job.status[i] = -2
+			continue
+		}
+		job.outputs[i] = string(output)
+		if job.outputs[i] == job.eval.results[i] {
+			correct++
+			job.status[i] = 1
+		} else {
+			job.status[i] = -1
+		}
+		if debug {
+			comparison += fmt.Sprintf("%q\n%q\n\n", job.eval.results[i], job.outputs[i])
+		}
+	}
+	if len(cases) == correct {
+		setJob(fmt.Sprintf("all %d cases passed! ", correct), nil)
+		return nil
+	}
+	msg := fmt.Sprintf("%d/%d cases passed", correct, len(cases))
+	if debug {
+		msg += "\n" + comparison
+	}
+	setJob(msg, errors.New("Did not pass all cases"))
+	return nil
 }
