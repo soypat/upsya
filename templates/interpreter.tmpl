@@ -4,7 +4,7 @@
 {{ define "interpreter" -}}
 <form id="interpreter" method="POST" enctype="multipart/form-data">
     <!--csrf()-->
-    {{if .Title }}
+    {{if ne .Title "" }}
     <input name="EvaluationID" value="{{ $.ID }}" type="hidden">
     {{ end }}
     <div class="container">
@@ -12,8 +12,11 @@
             <div class="col-4" id="head" itemprop="name">
                     <button id="run" class="btn btn-primary btn-lg p-1 px-2">Run</button>
            </div>
+            {{if ne .Title "" }}
+            <div class="col-0">Evaluación {{safe .Title }}</div>
+            {{else}}
             <div class="col-0">Interpretador</div>
-            <div class="col-5" id="user">Usuario X</div>
+            {{ end }}
             <div class="col-3" id="elapsed"></div>
         </div>
         <div id="wrap" class="row">

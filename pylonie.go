@@ -49,7 +49,6 @@ type evaluationJob struct {
 }
 
 func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
-	log.Println("handle run start")
 	type pyUserInput struct {
 		Code         string
 		EvaluationID string
@@ -84,7 +83,6 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
 		return
 	}
-	log.Println("handling run")
 	eid, _ := strconv.Atoi(src.EvaluationID)
 	if eid > 0 {
 		// Find evaluation if this is an evaluation.
@@ -94,6 +92,7 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 					eval:     ev,
 					filename: fpath,
 				}
+				log.Println("running evaluation for", eid)
 				p.evaluate(r.Context(), &ej)
 				json.NewEncoder(rw).Encode(ej)
 				return
@@ -102,6 +101,7 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "evaluation not found", nil, http.StatusBadRequest)
 		return
 	}
+	log.Println("running interpreter")
 	// Below is regular interpreter logic.
 	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
 	defer cancel()
@@ -151,29 +151,30 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 			return ctx.Err()
 		}
 		output, err := cmd.CombinedOutput()
-		// special case for 1 empty test input
-		if len(cases) == 1 && cases[0] == "" {
-			setJob(string(output), err)
-			return nil
-		}
+		job.outputs[i] = string(output)
 		if err != nil {
 			job.status[i] = -2
+			if debug {
+				job.outputs[i] += " " + err.Error()
+			}
 			continue
 		}
-		job.outputs[i] = string(output)
 		if job.outputs[i] == job.eval.results[i] {
 			correct++
 			job.status[i] = 1
 		} else {
 			job.status[i] = -1
 		}
-		if debug {
-			comparison += fmt.Sprintf("%q\n%q\n\n", job.eval.results[i], job.outputs[i])
-		}
 	}
 	if len(cases) == correct {
 		setJob(fmt.Sprintf("all %d cases passed! ", correct), nil)
 		return nil
+	}
+	if debug {
+		// generate debug info
+		for i := range cases {
+			comparison += fmt.Sprintf("%q\n%q %d\n\n", job.eval.results[i], job.outputs[i], job.status[i])
+		}
 	}
 	msg := fmt.Sprintf("%d/%d cases passed", correct, len(cases))
 	if debug {
