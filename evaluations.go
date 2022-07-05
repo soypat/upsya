@@ -63,7 +63,7 @@ func (e *Evaluator) handleListEvaluations(rw http.ResponseWriter, r *http.Reques
 
 func (e *Evaluator) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 	num := r.URL.Query().Get("ID")
-	n, err := strconv.ParseInt(num, 10, 64)
+	n, err := strconv.ParseUint(num, 10, 64)
 	if err != nil {
 		httpErr(rw, "error parsing url", err, http.StatusBadRequest)
 		return
@@ -90,11 +90,8 @@ type Evaluation struct {
 	results []string
 }
 
-func (e *Evaluation) ID() (sum int64) {
-	for _, v := range e.Title {
-		sum ^= int64(v*49) | int64(v*41)<<32
-	}
-	return sum
+func (e *Evaluation) ID() (sum uint64) {
+	return nchashStr(e.Title)
 }
 
 func (eval Evaluation) serialize(w io.Writer) (err error) {
@@ -159,4 +156,20 @@ func isDir(f fs.File) bool {
 
 func (e *Evaluation) StdinCases() []string {
 	return strings.Split(e.Stdin, "---\n")
+}
+
+func nchashStr(s string) uint64 {
+	return nchash([]byte(s))
+}
+
+// nchash is a non-cryptographic hash function.
+func nchash(b []byte) uint64 {
+	// Fowler-Noll-Vo (FNV) hash function.
+	const fnvPrime = 1099511628211
+	var hash uint64 = 14695981039346656037
+	for i := 0; i < len(b); i++ {
+		hash ^= uint64(b[i])
+		hash *= fnvPrime
+	}
+	return hash
 }

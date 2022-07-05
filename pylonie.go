@@ -83,11 +83,11 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
 		return
 	}
-	eid, _ := strconv.Atoi(src.EvaluationID)
+	eid, _ := strconv.ParseUint(src.EvaluationID, 10, 64)
 	if eid > 0 {
 		// Find evaluation if this is an evaluation.
 		for _, ev := range p.evals {
-			if ev.ID() == int64(eid) {
+			if ev.ID() == uint64(eid) {
 				ej := evaluationJob{
 					eval:     ev,
 					filename: fpath,
