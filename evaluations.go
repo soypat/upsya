@@ -97,7 +97,7 @@ func (e *Evaluation) ID() (sum int64) {
 }
 
 func (eval Evaluation) serialize(w io.Writer) (err error) {
-	const stdinPrefix = "Stdin cases:\n"
+	const stdinPrefix = "Stdin cases:"
 	_, err = w.Write([]byte("\"\"\"\n" + eval.Title + "\n" + eval.Description + "\n===\n"))
 	if err != nil {
 		return err
@@ -107,19 +107,19 @@ func (eval Evaluation) serialize(w io.Writer) (err error) {
 		return err
 	}
 	if eval.Stdin != "" {
-		_, err = w.Write([]byte("\n\"\"\"\n" + stdinPrefix + eval.Stdin + "\"\"\"\n"))
+		_, err = w.Write([]byte("\n\"\"\"\n" + stdinPrefix + "\n" + eval.Stdin + "\"\"\"\n"))
 	}
 	return err
 }
 
 func parseEval(r io.Reader) (eval Evaluation, err error) {
-	const stdinPrefix = "Stdin cases:\n"
+	const stdinPrefix = "Stdin cases:"
 	var s strings.Builder
 	_, err = io.Copy(&s, r)
 	if err != nil {
 		return eval, err
 	}
-	splits := strings.Split(s.String(), `"""`)
+	splits := strings.Split(strings.ReplaceAll(s.String(), "\r", ""), `"""`)
 	if len(splits) < 3 {
 		return eval, errors.New("docstrings not found")
 	}
