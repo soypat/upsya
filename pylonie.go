@@ -126,7 +126,7 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
-	cases := strings.Split(job.eval.Stdin, "---")
+	cases := job.eval.StdinCases()
 	job.status = make([]int, len(cases))
 	job.outputs = make([]string, len(cases))
 	start := time.Now()

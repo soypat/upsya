@@ -85,7 +85,8 @@ type Evaluation struct {
 	Content     string
 	Stdin       string
 	Solution    string
-	// result is a pre-resolved result of solution.
+	// Results is the standard output of the solution for each of the
+	// standard input test cases.
 	results []string
 }
 
@@ -154,4 +155,8 @@ func isDir(f fs.File) bool {
 		return err == nil
 	}
 	return false
+}
+
+func (e *Evaluation) StdinCases() []string {
+	return strings.Split(e.Stdin, "---\n")
 }

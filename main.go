@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"errors"
+	"flag"
 	"html/template"
 	"log"
 	"net/http"
@@ -22,6 +23,7 @@ var (
 )
 
 func main() {
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -29,6 +31,15 @@ func main() {
 }
 
 func run() error {
+	var addr string
+	flag.StringVar(&addr, "http", ":8080", "Address on which to serve http.")
+	help := flag.Bool("help", false, "summon help")
+	flag.Parse()
+	if *help {
+		flag.Usage()
+		log.Println("help called.")
+		os.Exit(0)
+	}
 	smux := http.NewServeMux()
 	tmpl, err := template.New("base").Funcs(funcmap).ParseFS(templateFS, "templates/*.tmpl")
 	if err != nil {
@@ -55,7 +66,6 @@ func run() error {
 
 	smux.HandleFunc("/py/run/", evaluator.handleRun)
 	sv := userMiddleware(smux)
-	addr := ":8080"
 	log.Println("Server started at http://127.0.0.1" + addr)
 	return http.ListenAndServe(addr, sv)
 }
