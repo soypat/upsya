@@ -1,11 +1,12 @@
 {{ template "header"}}
 
-
 {{ range . }}
 <div>
     <a href="?ID={{ .ID }}"><h5>{{safe .Title}}</h5></a>
     <p>{{.Description}}</p>
 </div>
+{{else}}
+<h3>No evaluations found.</h3>
 {{ end }}
 
 {{template "footer"}}

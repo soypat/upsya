@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday/v2"
@@ -23,7 +24,6 @@ var (
 )
 
 func main() {
-
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -31,14 +31,20 @@ func main() {
 }
 
 func run() error {
-	var addr string
+	var addr, evalDir string
 	flag.StringVar(&addr, "http", ":8080", "Address on which to serve http.")
+	flag.StringVar(&evalDir, "evaldir", "", "Evaluation base directory. Testdata available in source directory under \"testdata/evaluations\".")
 	help := flag.Bool("help", false, "summon help")
 	flag.Parse()
 	if *help {
 		flag.Usage()
 		log.Println("help called.")
 		os.Exit(0)
+	}
+	if evalDir == "" {
+		flag.Usage()
+		log.Println("evaldir flag not defined")
+		os.Exit(1)
 	}
 	smux := http.NewServeMux()
 	tmpl, err := template.New("base").Funcs(funcmap).ParseFS(templateFS, "templates/*.tmpl")
@@ -53,7 +59,7 @@ func run() error {
 		tmpls:  tmpl,
 		runner: cmdRunna(python),
 	}
-	err = evaluator.ParseAndEvaluateGlob("evaluations/*.py")
+	err = evaluator.ParseAndEvaluateGlob(path.Join(evalDir, "*.py"))
 	if err != nil {
 		return err
 	}
@@ -62,7 +68,6 @@ func run() error {
 		http.Redirect(w, r, "/py/evals", http.StatusTemporaryRedirect)
 	})
 	smux.HandleFunc("/py/evals", evaluator.handleListEvaluations)
-	// smux.HandleFunc("/py/evals", evaluator.handleEvaluation)
 
 	smux.HandleFunc("/py/run/", evaluator.handleRun)
 	sv := userMiddleware(smux)
