@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const (
+	pyTimeout = 500 * time.Millisecond
+)
+
 type pyRunna struct {
 	eval func(ctx context.Context, progPath string) (*exec.Cmd, error)
 }
@@ -103,7 +107,7 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 	}
 	log.Println("running interpreter")
 	// Below is regular interpreter logic.
-	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(r.Context(), pyTimeout)
 	defer cancel()
 	cmd, err := p.runner.eval(ctx, fpath)
 	if err != nil {
