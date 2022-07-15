@@ -16,9 +16,11 @@ import (
 )
 
 type Evaluator struct {
-	evals  []Evaluation
-	runner pyRunna
-	tmpls  *template.Template
+	evals     []Evaluation
+	jail      jail
+	pyCommand string // command string
+	// runner pyRunna
+	tmpls *template.Template
 }
 
 func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {

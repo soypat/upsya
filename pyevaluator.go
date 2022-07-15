@@ -9,9 +9,8 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,27 +19,6 @@ import (
 const (
 	pyTimeout = 500 * time.Millisecond
 )
-
-type pyRunna struct {
-	eval func(ctx context.Context, progPath string) (*exec.Cmd, error)
-}
-
-func cmdRunna(command string) pyRunna {
-	return pyRunna{
-		func(ctx context.Context, progPath string) (*exec.Cmd, error) {
-			stat, err := os.Stat(progPath)
-			if err != nil {
-				return nil, err
-			}
-			if stat.IsDir() {
-				return nil, errors.New("python program path is directory")
-			}
-			cmd := exec.CommandContext(ctx, command, path.Base(progPath))
-			cmd.Dir = path.Dir(progPath)
-			return cmd, nil
-		},
-	}
-}
 
 type evaluationJob struct {
 	eval     Evaluation
@@ -53,7 +31,7 @@ type evaluationJob struct {
 	Error   string
 }
 
-func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
+func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 	type pyUserInput struct {
 		Code         string
 		EvaluationID string
@@ -76,15 +54,11 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	os.Mkdir("tmp", 0777)
-	tempdir, err := os.MkdirTemp("tmp/", "*")
-	fpath := path.Join(tempdir, "prog.py")
-	if err != nil {
-		httpErr(rw, "creating temp dir", err, http.StatusInternalServerError)
-		return
-	}
-	defer os.RemoveAll(tempdir)
-	fp, err := os.Create(fpath)
+	tempdir := "tmp"
+	ev.jail.Mkdir(tempdir, 0777)
+	fpath := filepath.Join(tempdir, "prog.py")
+	defer ev.jail.RemoveAll(tempdir)
+	fp, err := ev.jail.CreateFile(fpath)
 	if err != nil {
 		httpErr(rw, "creating program file", err, http.StatusInternalServerError)
 		return
@@ -97,14 +71,14 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 	eid, _ := strconv.ParseUint(src.EvaluationID, 10, 64)
 	if eid > 0 {
 		// Find evaluation if this is an evaluation.
-		for _, ev := range p.evals {
-			if ev.ID() == uint64(eid) {
+		for _, eval := range ev.evals {
+			if eval.ID() == uint64(eid) {
 				ej := evaluationJob{
-					eval:     ev,
+					eval:     eval,
 					filename: fpath,
 				}
 				log.Println("running evaluation for", eid)
-				p.evaluate(r.Context(), &ej)
+				ev.evaluate(r.Context(), &ej)
 				json.NewEncoder(rw).Encode(ej)
 				return
 			}
@@ -116,7 +90,8 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 	// Below is regular interpreter logic.
 	ctx, cancel := context.WithTimeout(r.Context(), pyTimeout)
 	defer cancel()
-	cmd, err := p.runner.eval(ctx, fpath)
+	cmd := ev.jail.Command(ctx, pyTimeout, "", ev.pyCommand, fpath)
+	// cmd, err := p.runner.eval(ctx, th)
 	if err != nil {
 		httpErr(rw, "preparing program command", err, http.StatusInternalServerError)
 		return
@@ -142,7 +117,7 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 	job.status = make([]int, len(cases))
 	job.outputs = make([]string, len(cases))
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, pyTimeout)
 	setJob := func(output string, err error) {
 		job.Output = output
 		job.Elapsed = time.Since(start)
@@ -154,10 +129,7 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 	correct := 0
 	comparison := "\"ours\"\n\"theirs\"\n\n"
 	for i := range cases {
-		cmd, err := ev.runner.eval(ctx, job.filename)
-		if err != nil {
-			return err
-		}
+		cmd := ev.jail.Command(ctx, pyTimeout, "", ev.pyCommand, job.filename)
 		cmd.Stdin = strings.NewReader(cases[i])
 		if ctx.Err() != nil {
 			return ctx.Err()

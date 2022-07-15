@@ -1,78 +1,108 @@
 package main
 
 import (
-	"fmt"
-	"regexp"
-	"strings"
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"time"
 )
 
-// reForbid sanitization structures
-var reForbid = map[*regexp.Regexp]string{
-	regexp.MustCompile(`exec|eval|globals|locals|write|breakpoint|getattr|memoryview|vars|super`): "forbidden function key '%s'",
-	//regexp.MustCompile(`input\s*\(`):                           "no %s) to parse!",
-	regexp.MustCompile(`tofile|savetxt|fromfile|fromtxt|load\s*\(`): "forbidden numpy function key '%s'",
-	regexp.MustCompile("dump"):                                      "forbidden json function key '%s'",
-	regexp.MustCompile("to_csv|to_json|to_html|to_clipboard|to_excel|to_hdf|to_feather|to_parquet|to_msgpack|to_stata|to_pickle|to_sql|to_gbq"): "forbidden pandas function key '%s'",
-	regexp.MustCompile(`__\w+__`): "forbidden dunder function key '%s'",
+type jail interface {
+	Command(ctx context.Context, gracefulTimeout time.Duration, chdir, command string, args ...string) *exec.Cmd
+	CreateFile(name string) (*os.File, error)
+	Mkdir(name string, perm os.FileMode) error
+	MkdirAll(name string, perm os.FileMode) error
+	Remove(name string) error
+	RemoveAll(name string) error
 }
 
-// special treatment for imports since we may allow special imports such as math, numpy, pandas
-var reImport = regexp.MustCompile(`^from[\s]+[\w]+|import[\s]+[\w]+`)
-
-var allowedImports = map[string]bool{
-	"math":       true,
-	"numpy":      true,
-	"pandas":     true,
-	"json":       true,
-	"itertools":  false,
-	"processing": false,
-	"os":         false,
+type container struct {
+	// Containerized file system or VFS path to chroot to.
+	chrtDir string
+	// Initial directory where all actions are performed
+	// unless specified otherwise.
+	workDir string
 }
 
-func assertSafePython(sourceCode string) error {
-	const pyMaxSourceLength = 1200
-	if len(sourceCode) > pyMaxSourceLength {
-		return fmt.Errorf("code snippet too long (%d/%d)", len(sourceCode), pyMaxSourceLength)
-	}
-	semicolonSplit := strings.Split(sourceCode, ";")
-	newLineSplit := strings.Split(sourceCode, "\n")
-	for _, v := range append(semicolonSplit, newLineSplit...) {
-		for re, errF := range reForbid {
-			str := re.FindString(strings.TrimSpace(v))
-			if str != "" {
-				return fmt.Errorf(errF, str)
-			}
-		}
-		str := reImport.FindString(strings.TrimSpace(v))
-		if str != "" {
-			words := strings.Split(str, " ")
-			if len(words) < 2 {
-				return fmt.Errorf("unexpected import formatting: %s", str)
-			}
-			allowed, present := allowedImports[strings.TrimSpace(words[1])]
-			if !present {
-				return fmt.Errorf("import '%s' not in safelist:\n%s", strings.TrimSpace(words[1]), printSafeList())
-			}
-			if !allowed {
-				return fmt.Errorf("forbidden import '%s'", strings.TrimSpace(words[1]))
-			}
-		}
-	}
-	return nil
+// Command executes a containerized command using gontainer. timeout=0 disables timeout.
+//  c.Command(0, "", "python3", "theFile.py")
+// The chdir argument is the path the container is run inside the containerized
+// environemnt and is interpreted from the working directory of the container.
+func (c container) Command(ctx context.Context, gracefulTimeout time.Duration, chdir, command string, args ...string) *exec.Cmd {
+	chdir = filepath.Join(c.workDir, chdir)
+	args = append([]string{"-chrt", c.chrtDir, "-chdir", chdir,
+		"-timeout", gracefulTimeout.String(), command}, args...)
+	return exec.CommandContext(ctx, "gontainer", args...)
 }
 
-// printSafeList shows user what imports can
-// be used in interpreter
-func printSafeList() (s string) {
-	counter := 0
-	for k, v := range allowedImports {
-		if v {
-			counter++
-			if counter > 1 {
-				s += ",  "
-			}
-			s += k
-		}
+// CreateFile creates a file. See os.Create.
+func (c container) CreateFile(name string) (*os.File, error) {
+	return os.Create(c.osPath(name))
+}
+
+// osPath returns the operating system path to absolute path
+func (c container) osPath(containerPath string) string {
+	if filepath.IsAbs(containerPath) {
+		return filepath.Join(c.chrtDir, containerPath)
 	}
-	return s
+	return filepath.Join(c.chrtDir, c.workDir, containerPath)
+}
+
+// Mkdir creates a folder. See os.Mkdir.
+func (c container) Mkdir(name string, perm os.FileMode) error {
+	return os.Mkdir(c.osPath(name), perm)
+}
+
+// Mkdir creates a folder. See os.Mkdir.
+func (c container) MkdirAll(name string, perm os.FileMode) error {
+	return os.MkdirAll(c.osPath(name), perm)
+}
+
+func (c container) Remove(name string) error {
+	return os.Remove(c.osPath(name))
+}
+
+func (c container) RemoveAll(name string) error {
+	return os.RemoveAll(c.osPath(name))
+}
+
+type systemPython struct {
+	path string
+}
+
+var _ jail = systemPython{}
+
+func (s systemPython) Command(ctx context.Context, _ time.Duration, chdir, command string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, command, args...)
+	cmd.Dir = filepath.Join(s.path, chdir)
+	return cmd
+}
+
+// CreateFile creates a file. See os.Create.
+func (s systemPython) CreateFile(name string) (*os.File, error) {
+	return os.Create(s.osPath(name))
+}
+
+// osPath returns the operating system path to absolute path
+func (s systemPython) osPath(relPath string) string {
+	return filepath.Join(s.path, relPath)
+}
+
+// Mkdir creates a folder. See os.Mkdir.
+func (s systemPython) Mkdir(name string, perm os.FileMode) error {
+	return os.Mkdir(s.osPath(name), perm)
+}
+
+// Mkdir creates a folder. See os.Mkdir.
+func (s systemPython) MkdirAll(name string, perm os.FileMode) error {
+	return os.MkdirAll(s.osPath(name), perm)
+}
+
+func (s systemPython) Remove(name string) error {
+	return os.Remove(s.osPath(name))
+}
+
+func (s systemPython) RemoveAll(name string) error {
+	return os.RemoveAll(s.osPath(name))
 }

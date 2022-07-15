@@ -55,9 +55,12 @@ func run() error {
 	if python == "" {
 		return errors.New("PYTHON3 env variable not set. must be python executable location or command name. i.e. \"python3\".")
 	}
-	evaluator := Evaluator{
-		tmpls:  tmpl,
-		runner: cmdRunna(python),
+	evaluator := Evaluator{tmpls: tmpl, pyCommand: python}
+	if os.Getenv("GONTAINER_FS") == "" {
+		os.Mkdir("tmp", 0777)
+		evaluator.jail = systemPython{}
+	} else {
+		evaluator.jail = container{chrtDir: os.Getenv("GONTAINER_FS")}
 	}
 	err = evaluator.ParseAndEvaluateGlob(path.Join(evalDir, "*.py"))
 	if err != nil {
