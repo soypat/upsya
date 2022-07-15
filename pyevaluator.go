@@ -69,6 +69,12 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "", err, http.StatusBadRequest)
 		return
 	}
+	if err := assertSafePython(src.Code); err != nil {
+		json.NewEncoder(rw).Encode(pyResult{
+			Error: err.Error(),
+		})
+		return
+	}
 	os.Mkdir("tmp", 0777)
 	tempdir, err := os.MkdirTemp("tmp/", "*")
 	fpath := path.Join(tempdir, "prog.py")
