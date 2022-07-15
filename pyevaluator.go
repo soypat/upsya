@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -121,7 +122,8 @@ func (p *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start := time.Now()
-	output, err := cmd.CombinedOutput()
+	output, err := limitCombinedOutput(cmd, 800)
+	// output, err := cmd.CombinedOutput()
 	result := pyResult{
 		Output:  string(output),
 		Elapsed: time.Since(start),
@@ -160,7 +162,7 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		output, err := cmd.CombinedOutput()
+		output, err := limitCombinedOutput(cmd, 1000) //cmd.CombinedOutput()
 		job.outputs[i] = string(output)
 		if err != nil {
 			job.status[i] = -2
@@ -192,4 +194,28 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 	}
 	setJob(msg, errors.New("Did not pass all cases"))
 	return nil
+}
+
+// limitCombinedOutput returns the combined Stdout and Stderr output of
+// the command while limiting it to n bytes.
+func limitCombinedOutput(cmd *exec.Cmd, n int64) (output []byte, err error) {
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	defer stdout.Close()
+	defer stderr.Close()
+	rd := &io.LimitedReader{
+		R: io.MultiReader(stdout, stderr),
+		N: n,
+	}
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	defer cmd.Process.Kill()
+	var b bytes.Buffer
+	_, err = io.Copy(&b, rd)
+	if rd.N == 0 {
+		return b.Bytes(), errors.New("too much output")
+	}
+	return b.Bytes(), err
 }
