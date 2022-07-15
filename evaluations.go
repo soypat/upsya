@@ -29,6 +29,12 @@ func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
 	if err != nil {
 		return err
 	}
+	// Obtain solutions with local python installation.
+	originalJail := e.jail
+	defer func() {
+		e.jail = originalJail
+	}()
+	e.jail = systemPython{}
 	for _, match := range matches {
 		p, _ := FS.Open(match)
 		if isDir(p) {

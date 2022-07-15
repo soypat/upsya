@@ -31,9 +31,12 @@ type container struct {
 // environemnt and is interpreted from the working directory of the container.
 func (c container) Command(ctx context.Context, gracefulTimeout time.Duration, chdir, command string, args ...string) *exec.Cmd {
 	chdir = filepath.Join(c.workDir, chdir)
-	args = append([]string{"-chrt", c.chrtDir, "-chdir", chdir,
-		"-timeout", gracefulTimeout.String(), command}, args...)
-	return exec.CommandContext(ctx, "gontainer", args...)
+	newargs := append([]string{"-chrt", c.chrtDir, "-timeout", gracefulTimeout.String()})
+	if chdir != "" {
+		newargs = append(newargs, "-chdir", chdir)
+	}
+	newargs = append(append(newargs, "run", command), args...)
+	return exec.CommandContext(ctx, "gontainer", newargs...)
 }
 
 // CreateFile creates a file. See os.Create.

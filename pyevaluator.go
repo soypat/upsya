@@ -54,8 +54,11 @@ func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	tempdir := "tmp"
-	ev.jail.Mkdir(tempdir, 0777)
+	tempdir := "/usr/tmp"
+	err = ev.jail.MkdirAll(tempdir, 0777)
+	if err != nil {
+		log.Println(err)
+	}
 	fpath := filepath.Join(tempdir, "prog.py")
 	defer ev.jail.RemoveAll(tempdir)
 	fp, err := ev.jail.CreateFile(fpath)
@@ -127,7 +130,7 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 	}
 	defer cancel()
 	correct := 0
-	comparison := "\"ours\"\n\"theirs\"\n\n"
+	comparison := "\"ours\"\n\"yours\"\n\n"
 	for i := range cases {
 		cmd := ev.jail.Command(ctx, pyTimeout, "", ev.pyCommand, job.filename)
 		cmd.Stdin = strings.NewReader(cases[i])
