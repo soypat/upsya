@@ -1,11 +1,11 @@
 {{/* 
-    Optionally receives an Evaluation as first and only argument.
+    Optionally receives an Evaluation (non pointer) as first and only argument.
 */}}
 {{ define "interpreter" -}}
 <form id="interpreter" method="POST" enctype="multipart/form-data">
     <!--csrf()-->
     {{if ne .Title "" }}
-    <input name="EvaluationID" value="{{ $.ID }}" type="hidden">
+    <input name="EvaluationID" value="{{ .ID }}" type="hidden">
     {{ end }}
     <div class="container">
         <div class="row" id="banner">

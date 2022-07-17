@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type baseMiddleware struct {
@@ -27,11 +26,10 @@ func userMiddleware(h http.Handler) *baseMiddleware {
 	return &baseMiddleware{
 		handler: h,
 		onRequest: func(rw http.ResponseWriter, r *http.Request) {
-			http.SetCookie(rw, &http.Cookie{
-				Name:    "user_id",
-				Value:   "gobotor",
-				Expires: time.Date(2030, 1, 1, 1, 1, 1, 1, time.UTC),
-			})
+			c, err := r.Cookie("email")
+			if err == nil {
+				r.SetBasicAuth(c.Value, "")
+			}
 			if strings.HasPrefix(r.URL.Path, "/assets/css/") {
 				rw.Header().Add("Content-Type", "text/css")
 			} else if strings.HasPrefix(r.URL.Path, "/assets/js/") {
@@ -42,7 +40,9 @@ func userMiddleware(h http.Handler) *baseMiddleware {
 }
 
 func httpErr(rw http.ResponseWriter, msg string, err error, status int) {
-	msg += ": " + err.Error()
+	if err != nil {
+		msg += ": " + err.Error()
+	}
 	log.Println("error in request: ", msg)
 	http.Error(rw, msg, status)
 }

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -55,24 +56,36 @@ func run() error {
 	if python == "" {
 		return errors.New("PYTHON3 env variable not set. must be python executable location or command name. i.e. \"python3\".")
 	}
-	evaluator := Evaluator{tmpls: tmpl, pyCommand: python}
+	evaluator := Evaluator{
+		tmpls:     tmpl,
+		pyCommand: python,
+		auth:      newauthbase(),
+	}
 	if os.Getenv("GONTAINER_FS") == "" {
-		os.Mkdir("tmp", 0777)
 		evaluator.jail = systemPython{}
 	} else {
-		evaluator.jail = container{chrtDir: os.Getenv("GONTAINER_FS")}
+		evaluator.jail = container{
+			chrtDir: os.Getenv("GONTAINER_FS"),
+			workDir: "/home",
+		}
+	}
+	err = evaluator.jail.MkdirAll("tmp", 0777)
+	if err != nil {
+		return fmt.Errorf("creating tmp directory in jail: %s", err)
 	}
 	err = evaluator.ParseAndEvaluateGlob(path.Join(evalDir, "*.py"))
 	if err != nil {
 		return err
 	}
+	// Set endpoints.
 	smux.Handle("/assets/", http.FileServer(http.FS(assetFS)))
+	smux.HandleFunc("/py/evals", evaluator.handleListEvaluations)
+	smux.HandleFunc("/py/run/", evaluator.handleRun)
 	smux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/py/evals", http.StatusTemporaryRedirect)
 	})
-	smux.HandleFunc("/py/evals", evaluator.handleListEvaluations)
-
-	smux.HandleFunc("/py/run/", evaluator.handleRun)
+	smux.HandleFunc("/auth/", evaluator.handleAuth)
+	// Wrapping middleware for all http requests.
 	sv := userMiddleware(smux)
 	log.Println("Server started at http://127.0.0.1" + addr)
 	return http.ListenAndServe(addr, sv)

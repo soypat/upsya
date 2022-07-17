@@ -1,0 +1,7 @@
+{{ template "header"}}
+{{if .User.Email}}
+<p>You are logged in as {{.User.Email}}</p>
+{{else}}
+<a href="{{.AuthURL}}">Login</a>
+{{end}}
+{{template "footer"}}

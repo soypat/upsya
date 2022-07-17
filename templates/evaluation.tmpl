@@ -3,13 +3,15 @@
 <h5>Evaluación</h5>
 <div class="row" style="margin-bottom: 3rem;">
     <h2 class="text-muted">
-        {{safe .Title}}
+        {{safe .Eval.Title}}
     </h2>
     <div class="col-md-8 mt-5 offset-md-1">
-        {{ markdown .Content }}
+        {{ markdown .Eval.Content }}
     </div>
 </div>
-
-{{template "interpreter" .}}
+{{ if .User }}
+<p>Estás resolviendo este ejercicio como <span style="color:green">{{.User.Email}}</span></p>
+{{end}}
+{{template "interpreter" .Eval}}
 
 {{template "footer"}}

@@ -21,6 +21,7 @@ type Evaluator struct {
 	pyCommand string // command string
 	// runner pyRunna
 	tmpls *template.Template
+	auth  *authbase
 }
 
 func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
@@ -76,15 +77,27 @@ func (e *Evaluator) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "error parsing url", err, http.StatusBadRequest)
 		return
 	}
+	u, _ := getUserSession(r)
 	for _, ev := range e.evals {
 		if n == ev.ID() {
-			err := e.tmpls.Lookup("evaluation.tmpl").Execute(rw, &ev)
+			err := e.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
+				Eval Evaluation
+				User User
+			}{
+				Eval: ev,
+				User: u,
+			})
 			if err != nil {
 				log.Println(err)
 			}
 			return
 		}
 	}
+}
+
+type EvalGroup struct {
+	Evals     []Evaluation
+	SubGroups []EvalGroup
 }
 
 type Evaluation struct {
@@ -98,8 +111,8 @@ type Evaluation struct {
 	results []string
 }
 
-func (e *Evaluation) ID() (sum uint64) {
-	return nchashStr(e.Title)
+func (e Evaluation) ID() (sum uint64) {
+	return nchashStr(strings.Join(e.results, ""))
 }
 
 func (eval Evaluation) serialize(w io.Writer) (err error) {
@@ -174,7 +187,7 @@ func nchashStr(s string) uint64 {
 func nchash(b []byte) uint64 {
 	// Fowler-Noll-Vo (FNV) hash function.
 	const fnvPrime = 1099511628211
-	var hash uint64 = 14695981039346656037
+	var hash uint64 = 14695981039346656037 // Seed the hash.
 	for i := 0; i < len(b); i++ {
 		hash ^= uint64(b[i])
 		hash *= fnvPrime

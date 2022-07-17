@@ -18,6 +18,8 @@ import (
 
 const (
 	pyTimeout = 500 * time.Millisecond
+	// Maximum length of stdout output of evaluations
+	pyMaxStdoutLen = 600
 )
 
 type evaluationJob struct {
@@ -100,8 +102,7 @@ func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start := time.Now()
-	output, err := limitCombinedOutput(cmd, 800)
-	// output, err := cmd.CombinedOutput()
+	output, err := limitCombinedOutput(cmd, pyMaxStdoutLen)
 	result := pyResult{
 		Output:  string(output),
 		Elapsed: time.Since(start),
@@ -137,7 +138,7 @@ func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		output, err := limitCombinedOutput(cmd, 1000) //cmd.CombinedOutput()
+		output, err := limitCombinedOutput(cmd, pyMaxStdoutLen) //cmd.CombinedOutput()
 		job.outputs[i] = string(output)
 		if err != nil {
 			job.status[i] = -2
