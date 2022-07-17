@@ -4,7 +4,7 @@ UDESA Python evaluator proof of concept.
 ### Usage
 1. Run project with PYTHON3 environment variable set.
     ```sh
-    PYTHON3=python3 go run . -evaldir testdata/evaluations
+    PYTHON3=python3 go run . -evalglob testdata/evaluations/*/*.py
     ```
     This will run uncontainerized code. Very unsafe for production. See below on how to containerize.
 
@@ -20,6 +20,6 @@ Once you have a mounted filsystem with a [python install on it](https://github.c
 
 ```sh
 sudo su # You must be root to modify containerized filesystem
-PYTHON3=python3 GONTAINER_FS=/mnt/your-vfs go run . -evaldir=testdata/evaluations
+PYTHON3=python3 GONTAINER_FS=/mnt/your-vfs go run . -evalglob testdata/evaluations/*/*.py
 ```
 Ready. All code run from there on out will be containerized.

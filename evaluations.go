@@ -8,14 +8,17 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type Evaluator struct {
+	eg        EvalGroup
 	evals     []Evaluation
 	jail      jail
 	pyCommand string // command string
@@ -30,7 +33,29 @@ func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
 	if err != nil {
 		return err
 	}
-	// Obtain solutions with local python installation.
+	if len(matches) == 0 {
+		return errors.New("No evaluations found with glob " + pattern)
+	}
+
+	// We obtain base directory for forming evaluation groups.
+	var shortlist []string
+	baseDir := ""
+	minBase := math.MaxInt
+	for _, match := range matches {
+		dir := filepath.Dir(match)
+		l := filepath.SplitList(dir)
+		if len(shortlist) > 0 && len(l) == len(shortlist) && shortlist[len(shortlist)-1] != l[len(l)-1] {
+			dir = filepath.Dir(dir)
+			l = l[:len(l)-1]
+		}
+		if len(l) <= minBase {
+			minBase = len(l)
+			baseDir = dir
+			shortlist = l
+		}
+	}
+	// Create main evalgroup.
+	egroup := EvalGroup{Dir: "Main"}
 	originalJail := e.jail
 	defer func() {
 		e.jail = originalJail
@@ -57,6 +82,12 @@ func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
 			return fmt.Errorf("running %s solution (%s): %s", match, ej.Error, err)
 		}
 		eval.results = ej.outputs
+		dir := strings.TrimPrefix(filepath.Dir(match), baseDir)
+		egroup.MkDirAll(dir)
+		err = egroup.AddEvaluation(dir, eval)
+		if err != nil {
+			return err
+		}
 		e.evals = append(e.evals, eval)
 	}
 	return nil
@@ -96,8 +127,77 @@ func (e *Evaluator) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 }
 
 type EvalGroup struct {
+	Dir       string
 	Evals     []Evaluation
 	SubGroups []EvalGroup
+}
+
+func (eg *EvalGroup) AddEvaluation(dir string, eval Evaluation) error {
+	var errOK = errors.New("unreachable sentinel error")
+	trim := func(s string) string {
+		return strings.TrimFunc(s, func(r rune) bool { return r == filepath.Separator })
+	}
+	err := eg.Walk(func(lvl int, path string, e *EvalGroup) error {
+		if trim(path) == trim(dir) {
+			e.Evals = append(e.Evals, eval)
+			return errOK
+		}
+		return nil
+	})
+	if errors.Is(err, errOK) {
+		return nil
+	}
+	return errors.New("evalgroup dir " + dir + " not found")
+}
+
+func (eg *EvalGroup) MkDirAll(path string) {
+	list := filepath.SplitList(path)
+	if len(list) == 0 {
+		return
+	}
+	eg.addir(list[0], list[1:])
+}
+
+func (eg *EvalGroup) addir(newdir string, todo []string) {
+	newdir = strings.TrimPrefix(newdir, "/")
+	var toAdd *EvalGroup
+	found := false
+	for i := range eg.SubGroups {
+		if eg.SubGroups[i].Dir == newdir {
+			found = true
+			toAdd = &eg.SubGroups[i]
+			break
+		}
+	}
+	if !found {
+		eg.SubGroups = append(eg.SubGroups, EvalGroup{Dir: newdir})
+		toAdd = &eg.SubGroups[len(eg.SubGroups)-1]
+	}
+	if len(todo) == 0 {
+		return
+	}
+	toAdd.addir(todo[0], todo[1:])
+}
+
+// Walk recursively traverses Evalgroup and subgroups depth-first.
+func (eg *EvalGroup) Walk(fn func(lvl int, path string, e *EvalGroup) error) error {
+	return eg.walk(0, string(filepath.Separator), fn)
+}
+
+func (eg *EvalGroup) walk(lvl int, path string, fn func(lvl int, path string, e *EvalGroup) error) error {
+	// path = filepath.Join(path, eg.Dir)
+	err := fn(lvl, path, eg)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(eg.SubGroups); i++ {
+		subeg := &eg.SubGroups[i]
+		err = subeg.walk(lvl+1, filepath.Join(path, subeg.Dir), fn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type Evaluation struct {

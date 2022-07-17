@@ -56,7 +56,11 @@ func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	tempdir := "/usr/tmp"
+	wd, err := ev.jail.Getwd()
+	if err != nil {
+		log.Println(err)
+	}
+	tempdir := filepath.Join(wd, "tmp")
 	err = ev.jail.MkdirAll(tempdir, 0777)
 	if err != nil {
 		log.Println(err)

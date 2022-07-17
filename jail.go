@@ -15,6 +15,7 @@ type jail interface {
 	MkdirAll(name string, perm os.FileMode) error
 	Remove(name string) error
 	RemoveAll(name string) error
+	Getwd() (string, error)
 }
 
 type container struct {
@@ -24,6 +25,8 @@ type container struct {
 	// unless specified otherwise.
 	workDir string
 }
+
+var _ jail = container{}
 
 // Command executes a containerized command using gontainer. timeout=0 disables timeout.
 //  c.Command(0, "", "python3", "theFile.py")
@@ -70,6 +73,13 @@ func (c container) RemoveAll(name string) error {
 	return os.RemoveAll(c.osPath(name))
 }
 
+func (c container) Getwd() (string, error) {
+	if c.workDir == "" || c.workDir == "." {
+		return "/", nil
+	}
+	return c.workDir, nil
+}
+
 type systemPython struct {
 	path string
 }
@@ -108,4 +118,8 @@ func (s systemPython) Remove(name string) error {
 
 func (s systemPython) RemoveAll(name string) error {
 	return os.RemoveAll(s.osPath(name))
+}
+func (s systemPython) Getwd() (string, error) {
+	pwd, err := os.Getwd()
+	return filepath.Join(pwd, s.path), err
 }

@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday/v2"
@@ -32,9 +31,9 @@ func main() {
 }
 
 func run() error {
-	var addr, evalDir string
+	var addr, evalGlob string
 	flag.StringVar(&addr, "http", ":8080", "Address on which to serve http.")
-	flag.StringVar(&evalDir, "evaldir", "", "Evaluation base directory. Testdata available in source directory under \"testdata/evaluations\".")
+	flag.StringVar(&evalGlob, "evalglob", "", "Evaluation base directory. Testdata available in source directory under \"testdata/evaluations/*.py\".")
 	help := flag.Bool("help", false, "summon help")
 	flag.Parse()
 	if *help {
@@ -42,9 +41,9 @@ func run() error {
 		log.Println("help called.")
 		os.Exit(0)
 	}
-	if evalDir == "" {
+	if evalGlob == "" {
 		flag.Usage()
-		log.Println("evaldir flag not defined")
+		log.Println("evalglob flag not defined")
 		os.Exit(1)
 	}
 	smux := http.NewServeMux()
@@ -73,7 +72,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating tmp directory in jail: %s", err)
 	}
-	err = evaluator.ParseAndEvaluateGlob(path.Join(evalDir, "*.py"))
+	err = evaluator.ParseAndEvaluateGlob(evalGlob)
 	if err != nil {
 		return err
 	}
