@@ -33,7 +33,7 @@ type evaluationJob struct {
 	Error   string
 }
 
-func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
+func (ev *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 	type pyUserInput struct {
 		Code         string
 		EvaluationID string
@@ -80,7 +80,7 @@ func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 	eid, _ := strconv.ParseUint(src.EvaluationID, 10, 64)
 	if eid > 0 {
 		// Find evaluation if this is an evaluation.
-		for _, eval := range ev.evals {
+		for _, eval := range ev.evalmap {
 			if eval.ID() == uint64(eid) {
 				ej := evaluationJob{
 					eval:     eval,
@@ -120,7 +120,7 @@ func (ev *Evaluator) handleRun(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(result)
 }
 
-func (ev *Evaluator) evaluate(ctx context.Context, job *evaluationJob) error {
+func (ev *Server) evaluate(ctx context.Context, job *evaluationJob) error {
 	cases := job.eval.StdinCases()
 	job.status = make([]int, len(cases))
 	job.outputs = make([]string, len(cases))

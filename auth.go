@@ -33,7 +33,7 @@ func newauthbase() *authbase {
 	}
 }
 
-func (a *Evaluator) handleAuth(rw http.ResponseWriter, r *http.Request) {
+func (a *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
 	type Auth struct {
 		User    User
 		AuthURL string

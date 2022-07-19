@@ -1,0 +1,16 @@
+{{define "evalgroup" -}}
+
+<h3>Grupo de evaluación {{.}}</h3>
+{{range .SubGroups}}
+<h4><a href="{{.}}">{{.}}</a></h4>
+{{end}}
+{{range .Evals}}
+<div>
+    <a href="?ID={{ .ID }}"><h5>{{safe .Title}}</h5></a>
+    <p>{{.Description}}</p>
+</div>
+{{else}}
+<h3>No evaluations found.</h3>
+{{ end }}
+
+{{- end}}

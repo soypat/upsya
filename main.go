@@ -55,7 +55,7 @@ func run() error {
 	if python == "" {
 		return errors.New("PYTHON3 env variable not set. must be python executable location or command name. i.e. \"python3\".")
 	}
-	evaluator := Evaluator{
+	evaluator := Server{
 		tmpls:     tmpl,
 		pyCommand: python,
 		auth:      newauthbase(),
@@ -78,10 +78,11 @@ func run() error {
 	}
 	// Set endpoints.
 	smux.Handle("/assets/", http.FileServer(http.FS(assetFS)))
-	smux.HandleFunc("/py/evals", evaluator.handleListEvaluations)
+
+	smux.Handle("/py/evals/", http.StripPrefix("/py/evals/", http.HandlerFunc(evaluator.handleListEvaluations)))
 	smux.HandleFunc("/py/run/", evaluator.handleRun)
 	smux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/py/evals", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/py/evals/", http.StatusTemporaryRedirect)
 	})
 	smux.HandleFunc("/auth/", evaluator.handleAuth)
 	// Wrapping middleware for all http requests.

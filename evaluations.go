@@ -17,9 +17,9 @@ import (
 	"time"
 )
 
-type Evaluator struct {
+type Server struct {
 	eg        EvalGroup
-	evals     []Evaluation
+	evalmap   map[uint64]Evaluation
 	jail      jail
 	pyCommand string // command string
 	// runner pyRunna
@@ -27,7 +27,7 @@ type Evaluator struct {
 	auth  *authbase
 }
 
-func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
+func (e *Server) ParseAndEvaluateGlob(pattern string) error {
 	FS := os.DirFS(".")
 	matches, err := fs.Glob(FS, pattern)
 	if err != nil {
@@ -54,6 +54,7 @@ func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
 			shortlist = l
 		}
 	}
+	evaluationMap := make(map[uint64]Evaluation)
 	// Create main evalgroup.
 	egroup := EvalGroup{Dir: "Main"}
 	originalJail := e.jail
@@ -88,41 +89,60 @@ func (e *Evaluator) ParseAndEvaluateGlob(pattern string) error {
 		if err != nil {
 			return err
 		}
-		e.evals = append(e.evals, eval)
+		id := eval.ID()
+		if existing, ok := evaluationMap[id]; ok {
+			return errors.New("evaluation " + existing.Title + " ID collides with evaluation " + eval.Title)
+		}
+		evaluationMap[id] = eval
 	}
+	e.eg = egroup
+	e.evalmap = evaluationMap
 	return nil
 }
 
-func (e *Evaluator) handleListEvaluations(rw http.ResponseWriter, r *http.Request) {
+func (e *Server) handleListEvaluations(rw http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Has("ID") {
 		e.handleEvaluation(rw, r)
 		return
 	}
-	e.tmpls.Lookup("all_evaluations.tmpl").Execute(rw, e.evals)
+	group := e.eg
+	urlPath := "/" + r.URL.Path
+	e.eg.Walk(func(lvl int, path string, e *EvalGroup) error {
+		if path == urlPath {
+			group = *e
+			return errors.New("sentinel error")
+		}
+		return nil
+	})
+	e.tmpls.Lookup("all_evaluations.tmpl").Execute(rw, struct {
+		Egroup EvalGroup
+	}{
+		Egroup: group,
+	})
 }
 
-func (e *Evaluator) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
+func (e *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 	num := r.URL.Query().Get("ID")
 	n, err := strconv.ParseUint(num, 10, 64)
 	if err != nil {
 		httpErr(rw, "error parsing url", err, http.StatusBadRequest)
 		return
 	}
+	eval, ok := e.evalmap[n]
+	if !ok {
+		httpErr(rw, "evaluation "+num+" not found", nil, http.StatusBadRequest)
+		return
+	}
 	u, _ := getUserSession(r)
-	for _, ev := range e.evals {
-		if n == ev.ID() {
-			err := e.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
-				Eval Evaluation
-				User User
-			}{
-				Eval: ev,
-				User: u,
-			})
-			if err != nil {
-				log.Println(err)
-			}
-			return
-		}
+	err = e.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
+		Eval Evaluation
+		User User
+	}{
+		Eval: eval,
+		User: u,
+	})
+	if err != nil {
+		log.Println(err)
 	}
 }
 
@@ -130,6 +150,10 @@ type EvalGroup struct {
 	Dir       string
 	Evals     []Evaluation
 	SubGroups []EvalGroup
+}
+
+func (eg EvalGroup) String() string {
+	return eg.Dir
 }
 
 func (eg *EvalGroup) AddEvaluation(dir string, eval Evaluation) error {
@@ -181,18 +205,17 @@ func (eg *EvalGroup) addir(newdir string, todo []string) {
 
 // Walk recursively traverses Evalgroup and subgroups depth-first.
 func (eg *EvalGroup) Walk(fn func(lvl int, path string, e *EvalGroup) error) error {
-	return eg.walk(0, string(filepath.Separator), fn)
+	return eg.glob(0, string(filepath.Separator), fn)
 }
 
-func (eg *EvalGroup) walk(lvl int, path string, fn func(lvl int, path string, e *EvalGroup) error) error {
-	// path = filepath.Join(path, eg.Dir)
+func (eg *EvalGroup) glob(lvl int, path string, fn func(lvl int, path string, e *EvalGroup) error) error {
 	err := fn(lvl, path, eg)
 	if err != nil {
 		return err
 	}
 	for i := 0; i < len(eg.SubGroups); i++ {
 		subeg := &eg.SubGroups[i]
-		err = subeg.walk(lvl+1, filepath.Join(path, subeg.Dir), fn)
+		err = subeg.glob(lvl+1, filepath.Join(path, subeg.Dir), fn)
 		if err != nil {
 			return err
 		}
