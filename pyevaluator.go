@@ -19,7 +19,7 @@ import (
 const (
 	pyTimeout = 500 * time.Millisecond
 	// Maximum length of stdout output of evaluations
-	pyMaxStdoutLen = 600
+	pyMaxStdoutLen = 1200
 )
 
 type evaluationJob struct {
@@ -145,11 +145,15 @@ func (ev *Server) evaluate(ctx context.Context, job *evaluationJob) error {
 		output, err := limitCombinedOutput(cmd, pyMaxStdoutLen) //cmd.CombinedOutput()
 		job.outputs[i] = string(output)
 		if err != nil {
-			job.status[i] = -2
 			if debug {
-				job.outputs[i] += " " + err.Error()
+				job.status[i] = -2
+				if debug {
+					job.outputs[i] += " " + err.Error()
+				}
+				continue
 			}
-			continue
+			setJob(string(output), err)
+			return nil
 		}
 		if job.outputs[i] == job.eval.results[i] {
 			correct++
@@ -194,8 +198,11 @@ func limitCombinedOutput(cmd *exec.Cmd, n int64) (output []byte, err error) {
 	defer cmd.Process.Kill()
 	var b bytes.Buffer
 	_, err = io.Copy(&b, rd)
+	if err != nil {
+		return nil, err
+	}
 	if rd.N == 0 {
 		return b.Bytes(), errors.New("too much output")
 	}
-	return b.Bytes(), err
+	return b.Bytes(), cmd.Wait()
 }
