@@ -33,13 +33,18 @@ func main() {
 func run() error {
 	var addr, evalGlob string
 	flag.StringVar(&addr, "http", ":8080", "Address on which to serve http.")
-	flag.StringVar(&evalGlob, "evalglob", "", "Evaluation base directory. Testdata available in source directory under \"testdata/evaluations/*.py\".")
+	flag.StringVar(&evalGlob, "evalglob", "", "Evaluation base directory. Testdata available in source directory under \"testdata/evaluations/*/*.py\".")
 	help := flag.Bool("help", false, "summon help")
 	flag.Parse()
 	if *help {
 		flag.Usage()
 		log.Println("help called.")
 		os.Exit(0)
+	}
+	if len(flag.Args()) > 1 {
+		flag.Usage()
+		log.Println("got too many arguments:", flag.Args())
+		os.Exit(1)
 	}
 	if evalGlob == "" {
 		flag.Usage()
