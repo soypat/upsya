@@ -14,7 +14,7 @@ import (
 	"github.com/russross/blackfriday/v2"
 )
 
-const debug = true
+const debug = false
 
 var (
 	//go:embed assets
