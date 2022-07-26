@@ -19,7 +19,7 @@ import (
 const (
 	pyTimeout = 500 * time.Millisecond
 	// Maximum length of stdout output of evaluations
-	pyMaxStdoutLen = 600
+	pyMaxStdoutLen = 1200
 )
 
 type evaluationJob struct {
