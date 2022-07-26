@@ -14,9 +14,9 @@ import (
 	"github.com/russross/blackfriday/v2"
 )
 
-const debug = false
-
 var (
+	// debug mode enabled/disabled
+	debug bool
 	//go:embed assets
 	assetFS embed.FS
 	//go:embed templates
@@ -34,6 +34,7 @@ func run() error {
 	var addr, evalGlob string
 	flag.StringVar(&addr, "http", ":8080", "Address on which to serve http.")
 	flag.StringVar(&evalGlob, "evalglob", "", "Evaluation base directory. Testdata available in source directory under \"testdata/evaluations/*/*.py\".")
+	flag.BoolVar(&debug, "debug", false, "Enable debugging mode with extra help for users.")
 	help := flag.Bool("help", false, "summon help")
 	flag.Parse()
 	if *help {
@@ -50,6 +51,9 @@ func run() error {
 		flag.Usage()
 		log.Println("evalglob flag not defined")
 		os.Exit(1)
+	}
+	if debug {
+		log.Println("debug mode enabled")
 	}
 	smux := http.NewServeMux()
 	tmpl, err := template.New("base").Funcs(funcmap).ParseFS(templateFS, "templates/*.tmpl")
