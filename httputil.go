@@ -26,10 +26,6 @@ func userMiddleware(h http.Handler) *baseMiddleware {
 	return &baseMiddleware{
 		handler: h,
 		onRequest: func(rw http.ResponseWriter, r *http.Request) {
-			c, err := r.Cookie("email")
-			if err == nil {
-				r.SetBasicAuth(c.Value, "")
-			}
 			if strings.HasPrefix(r.URL.Path, "/assets/css/") {
 				rw.Header().Add("Content-Type", "text/css")
 			} else if strings.HasPrefix(r.URL.Path, "/assets/js/") {
