@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.etcd.io/bbolt"
 )
 
 const (
@@ -33,17 +35,14 @@ type evaluationJob struct {
 	Error   string
 }
 
+type PyUserInput struct {
+	Code         string
+	EvaluationID string
+	UserID       uint64
+}
+
 func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
-	type pyUserInput struct {
-		Code         string
-		EvaluationID string
-	}
-	type pyResult struct {
-		Output  string
-		Elapsed time.Duration
-		Error   string
-	}
-	var src pyUserInput
+	var src PyUserInput
 	rd := io.LimitReader(r.Body, 5000) // 600Bytes read max
 	err := json.NewDecoder(rd).Decode(&src)
 	if err != nil {
@@ -51,7 +50,7 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := assertSafePython(src.Code); err != nil {
-		json.NewEncoder(rw).Encode(pyResult{
+		json.NewEncoder(rw).Encode(struct{ Error, Output string }{
 			Error: err.Error(),
 		})
 		return
@@ -89,6 +88,7 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 				log.Println("running evaluation for", eid)
 				sv.evaluate(r.Context(), &ej)
 				json.NewEncoder(rw).Encode(ej)
+				go sv.saveEvaluationResult(src, ej) // non critical task
 				return
 			}
 		}
@@ -107,7 +107,11 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 	}
 	start := time.Now()
 	output, err := limitCombinedOutput(cmd, pyMaxStdoutLen)
-	result := pyResult{
+	result := struct {
+		Output  string
+		Elapsed time.Duration
+		Error   string
+	}{
 		Output:  string(output),
 		Elapsed: time.Since(start),
 		Error: (func(err error) string {
@@ -178,6 +182,44 @@ func (ev *Server) evaluate(ctx context.Context, job *evaluationJob) error {
 	}
 	setJob(msg, errors.New("Did not pass all cases"))
 	return nil
+}
+
+const (
+	timeKeyPadding = ".0000"
+	timeKeyFormat  = "2006-01-02 15:04:05.9999"
+)
+
+func boltKey(t time.Time) []byte {
+	// RFC3339 format allows for sortable keys. See https://github.com/etcd-io/bbolt#range-scans.
+	key := []byte(t.Format(timeKeyFormat))
+	diff := len(timeKeyFormat) - len(key)
+	key = append(key, timeKeyPadding[len(timeKeyPadding)-diff:]...)
+	return key
+}
+
+// saveEvaluationResult updates the server database with the python source code and evaluation results.
+func (sv *Server) saveEvaluationResult(src PyUserInput, job evaluationJob) {
+	defer func() {
+		a := recover()
+		if a != nil {
+			log.Printf("CRITICAL: panic in saveEvaluationResult: %v", a)
+		}
+	}()
+	err := sv.kvdb.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("evalresults"))
+		if b == nil {
+			return errors.New("evaluation result bucket not exist")
+		}
+		// Discarding error: Marshal fails in rare edge cases, we are assured it won't fail here.
+		value, _ := json.Marshal(struct {
+			Source PyUserInput
+			Job    evaluationJob
+		}{Source: src, Job: job})
+		return b.Put(boltKey(time.Now()), value)
+	})
+	if err != nil {
+		log.Printf("error saving evaluation: %v", err)
+	}
 }
 
 // limitCombinedOutput returns the combined Stdout and Stderr output of

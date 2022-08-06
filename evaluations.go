@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.etcd.io/bbolt"
 )
 
 type Server struct {
@@ -25,6 +27,7 @@ type Server struct {
 	// runner pyRunna
 	tmpls *template.Template
 	auth  *authbase
+	kvdb  *bbolt.DB
 }
 
 func (sv *Server) ParseAndEvaluateGlob(pattern string) error {

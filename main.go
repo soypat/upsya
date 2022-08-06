@@ -12,6 +12,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday/v2"
+	"go.etcd.io/bbolt"
 )
 
 var (
@@ -62,36 +63,48 @@ func run() error {
 	if python == "" {
 		return errors.New("PYTHON3 env variable not set. must be python executable location or command name. i.e. \"python3\".")
 	}
-	evaluator := Server{
+	server := Server{
 		tmpls:     tmpl,
 		pyCommand: python,
 		auth:      &authbase{},
 	}
 	if os.Getenv("GONTAINER_FS") == "" {
-		evaluator.jail = systemPython{}
+		server.jail = systemPython{}
 	} else {
-		evaluator.jail = container{
+		server.jail = container{
 			chrtDir: os.Getenv("GONTAINER_FS"),
 			workDir: "/home",
 		}
 	}
-	err = evaluator.jail.MkdirAll("tmp", 0777)
+	err = server.jail.MkdirAll("tmp", 0777)
 	if err != nil {
 		return fmt.Errorf("creating tmp directory in jail: %s", err)
 	}
-	err = evaluator.ParseAndEvaluateGlob(evalGlob)
+	err = server.ParseAndEvaluateGlob(evalGlob)
 	if err != nil {
 		return err
 	}
+	db, err := bbolt.Open("kvdb.bbolt", 0777, nil)
+	if err != nil {
+		return err
+	}
+	err = db.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("evalresults"))
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	server.kvdb = db
 	// Set endpoints.
 	smux.Handle("/assets/", http.FileServer(http.FS(assetFS)))
-
-	smux.Handle("/py/evals/", http.StripPrefix("/py/evals/", http.HandlerFunc(evaluator.handleListEvaluations)))
-	smux.HandleFunc("/py/run/", evaluator.handleRun)
+	smux.Handle("/py/evals/", http.StripPrefix("/py/evals/", http.HandlerFunc(server.handleListEvaluations)))
+	smux.HandleFunc("/py/run/", server.handleRun)
 	smux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/py/evals/", http.StatusTemporaryRedirect)
 	})
-	smux.HandleFunc("/auth/", evaluator.handleAuth)
+	smux.HandleFunc("/auth/", server.handleAuth)
+
 	// Wrapping middleware for all http requests.
 	sv := userMiddleware(smux)
 	log.Println("Server started at http://127.0.0.1" + addr)
