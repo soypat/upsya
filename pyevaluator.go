@@ -33,7 +33,7 @@ type evaluationJob struct {
 	Error   string
 }
 
-func (ev *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
+func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 	type pyUserInput struct {
 		Code         string
 		EvaluationID string
@@ -47,7 +47,7 @@ func (ev *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 	rd := io.LimitReader(r.Body, 5000) // 600Bytes read max
 	err := json.NewDecoder(rd).Decode(&src)
 	if err != nil {
-		httpErr(rw, "", err, http.StatusBadRequest)
+		sv.httpErr(rw, "", err, http.StatusBadRequest)
 		return
 	}
 	if err := assertSafePython(src.Code); err != nil {
@@ -56,53 +56,53 @@ func (ev *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	wd, err := ev.jail.Getwd()
+	wd, err := sv.jail.Getwd()
 	if err != nil {
 		log.Println(err)
 	}
 	tempdir := filepath.Join(wd, "tmp")
-	err = ev.jail.MkdirAll(tempdir, 0777)
+	err = sv.jail.MkdirAll(tempdir, 0777)
 	if err != nil {
 		log.Println(err)
 	}
 	fpath := filepath.Join(tempdir, "prog.py")
-	defer ev.jail.RemoveAll(tempdir)
-	fp, err := ev.jail.CreateFile(fpath)
+	defer sv.jail.RemoveAll(tempdir)
+	fp, err := sv.jail.CreateFile(fpath)
 	if err != nil {
-		httpErr(rw, "creating program file", err, http.StatusInternalServerError)
+		sv.httpErr(rw, "creating program file", err, http.StatusInternalServerError)
 		return
 	}
 	_, err = io.Copy(fp, strings.NewReader(src.Code))
 	if err != nil {
-		httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
+		sv.httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
 		return
 	}
 	eid, _ := strconv.ParseUint(src.EvaluationID, 10, 64)
 	if eid > 0 {
 		// Find evaluation if this is an evaluation.
-		for _, eval := range ev.evalmap {
+		for _, eval := range sv.evalmap {
 			if eval.ID() == uint64(eid) {
 				ej := evaluationJob{
 					eval:     eval,
 					filename: fpath,
 				}
 				log.Println("running evaluation for", eid)
-				ev.evaluate(r.Context(), &ej)
+				sv.evaluate(r.Context(), &ej)
 				json.NewEncoder(rw).Encode(ej)
 				return
 			}
 		}
-		httpErr(rw, "evaluation not found", nil, http.StatusBadRequest)
+		sv.httpErr(rw, "evaluation not found", nil, http.StatusBadRequest)
 		return
 	}
 	log.Println("running interpreter")
 	// Below is regular interpreter logic.
 	ctx, cancel := context.WithTimeout(r.Context(), pyTimeout)
 	defer cancel()
-	cmd := ev.jail.Command(ctx, pyTimeout, "", ev.pyCommand, fpath)
+	cmd := sv.jail.Command(ctx, pyTimeout, "", sv.pyCommand, fpath)
 	// cmd, err := p.runner.eval(ctx, th)
 	if err != nil {
-		httpErr(rw, "preparing program command", err, http.StatusInternalServerError)
+		sv.httpErr(rw, "preparing program command", err, http.StatusInternalServerError)
 		return
 	}
 	start := time.Now()

@@ -35,10 +35,16 @@ func userMiddleware(h http.Handler) *baseMiddleware {
 	}
 }
 
-func httpErr(rw http.ResponseWriter, msg string, err error, status int) {
+func (s *Server) httpErr(rw http.ResponseWriter, msg string, err error, status int) {
 	if err != nil {
 		msg += ": " + err.Error()
 	}
+	s.tmpls.Lookup("error.tmpl").Execute(rw, struct {
+		Header string
+		Code   int
+	}{
+		Header: msg,
+		Code:   status,
+	})
 	log.Println("error in request: ", msg)
-	http.Error(rw, msg, status)
 }

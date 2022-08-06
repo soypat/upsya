@@ -27,7 +27,7 @@ type Server struct {
 	auth  *authbase
 }
 
-func (e *Server) ParseAndEvaluateGlob(pattern string) error {
+func (sv *Server) ParseAndEvaluateGlob(pattern string) error {
 	FS := os.DirFS(".")
 	matches, err := fs.Glob(FS, pattern)
 	if err != nil {
@@ -58,11 +58,11 @@ func (e *Server) ParseAndEvaluateGlob(pattern string) error {
 	evaluationMap := make(map[uint64]Evaluation)
 	// Create main evalgroup.
 	egroup := EvalGroup{Dir: "Main"}
-	originalJail := e.jail
+	originalJail := sv.jail
 	defer func() {
-		e.jail = originalJail
+		sv.jail = originalJail
 	}()
-	e.jail = systemPython{}
+	sv.jail = systemPython{}
 	for _, match := range matches {
 		p, _ := FS.Open(match)
 		if isDir(p) {
@@ -79,7 +79,7 @@ func (e *Server) ParseAndEvaluateGlob(pattern string) error {
 			eval:     eval,
 			filename: match,
 		}
-		err = e.evaluate(ctx, &ej)
+		err = sv.evaluate(ctx, &ej)
 		if err != nil {
 			return fmt.Errorf("running %s solution (%s): %s", match, ej.Error, err)
 		}
@@ -96,46 +96,46 @@ func (e *Server) ParseAndEvaluateGlob(pattern string) error {
 		}
 		evaluationMap[id] = eval
 	}
-	e.eg = egroup
-	e.evalmap = evaluationMap
+	sv.eg = egroup
+	sv.evalmap = evaluationMap
 	return nil
 }
 
-func (e *Server) handleListEvaluations(rw http.ResponseWriter, r *http.Request) {
+func (sv *Server) handleListEvaluations(rw http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Has("ID") {
-		e.handleEvaluation(rw, r)
+		sv.handleEvaluation(rw, r)
 		return
 	}
-	group := e.eg
+	group := sv.eg
 	urlPath := "/" + r.URL.Path
-	e.eg.Walk(func(lvl int, path string, e *EvalGroup) error {
+	sv.eg.Walk(func(lvl int, path string, e *EvalGroup) error {
 		if path == urlPath {
 			group = *e
 			return errors.New("sentinel error")
 		}
 		return nil
 	})
-	e.tmpls.Lookup("all_evaluations.tmpl").Execute(rw, struct {
+	sv.tmpls.Lookup("all_evaluations.tmpl").Execute(rw, struct {
 		Egroup EvalGroup
 	}{
 		Egroup: group,
 	})
 }
 
-func (e *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
+func (sv *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 	num := r.URL.Query().Get("ID")
 	n, err := strconv.ParseUint(num, 10, 64)
 	if err != nil {
-		httpErr(rw, "error parsing url", err, http.StatusBadRequest)
+		sv.httpErr(rw, "error parsing url", err, http.StatusBadRequest)
 		return
 	}
-	eval, ok := e.evalmap[n]
+	eval, ok := sv.evalmap[n]
 	if !ok {
-		httpErr(rw, "evaluation "+num+" not found", nil, http.StatusBadRequest)
+		sv.httpErr(rw, "evaluation "+num+" not found", nil, http.StatusBadRequest)
 		return
 	}
-	u, _ := e.auth.getUserSession(r)
-	err = e.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
+	u, _ := sv.auth.getUserSession(r)
+	err = sv.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
 		Eval Evaluation
 		User User
 	}{

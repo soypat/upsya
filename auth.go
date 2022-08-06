@@ -10,19 +10,19 @@ import (
 
 type authbase struct{}
 
-func (a *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
+func (sv *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
 	var u User
 	query := r.URL.Query()
 	if query.Has("legajo") {
 		uid, err := strconv.ParseUint(query.Get("legajo"), 10, 64)
 		if err != nil || uid == 0 {
-			httpErr(rw, "legajo invalido", err, http.StatusBadRequest)
+			sv.httpErr(rw, "legajo invalido", err, http.StatusBadRequest)
 			return
 		}
 		u.ID = uid
-		a.auth.setUserSession(rw, u)
+		sv.auth.setUserSession(rw, u)
 	} else {
-		gotu, err := a.auth.getUserSession(r)
+		gotu, err := sv.auth.getUserSession(r)
 		if err != nil {
 			log.Println(err)
 		} else {
@@ -30,7 +30,7 @@ func (a *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
 			u = gotu
 		}
 	}
-	err := a.tmpls.Lookup("auth.tmpl").Execute(rw, struct{ User User }{
+	err := sv.tmpls.Lookup("auth.tmpl").Execute(rw, struct{ User User }{
 		User: u,
 	})
 	if err != nil {
