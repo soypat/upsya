@@ -54,6 +54,7 @@ func (e *Server) ParseAndEvaluateGlob(pattern string) error {
 			shortlist = l
 		}
 	}
+
 	evaluationMap := make(map[uint64]Evaluation)
 	// Create main evalgroup.
 	egroup := EvalGroup{Dir: "Main"}
@@ -133,7 +134,7 @@ func (e *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "evaluation "+num+" not found", nil, http.StatusBadRequest)
 		return
 	}
-	u, _ := getUserSession(r)
+	u, _ := e.auth.getUserSession(r)
 	err = e.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
 		Eval Evaluation
 		User User

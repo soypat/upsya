@@ -40,17 +40,15 @@ func run() error {
 	if *help {
 		flag.Usage()
 		log.Println("help called.")
-		os.Exit(0)
+		os.Exit(0) // finish succesfully in this case.
 	}
 	if len(flag.Args()) > 1 {
 		flag.Usage()
-		log.Println("got too many arguments:", flag.Args())
-		os.Exit(1)
+		return fmt.Errorf("got too many arguments: %s", flag.Args())
 	}
 	if evalGlob == "" {
 		flag.Usage()
-		log.Println("evalglob flag not defined")
-		os.Exit(1)
+		return fmt.Errorf("evalglob flag not defined")
 	}
 	if debug {
 		log.Println("debug mode enabled")
@@ -67,7 +65,7 @@ func run() error {
 	evaluator := Server{
 		tmpls:     tmpl,
 		pyCommand: python,
-		auth:      newauthbase(),
+		auth:      &authbase{},
 	}
 	if os.Getenv("GONTAINER_FS") == "" {
 		evaluator.jail = systemPython{}

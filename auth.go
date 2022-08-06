@@ -1,78 +1,37 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
-	"os"
-	"path"
+	"strconv"
 	"time"
-
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/github"
 )
 
-type authbase struct {
-	conf *oauth2.Config
-	URL  string
-}
-
-func newauthbase() *authbase {
-	conf := &oauth2.Config{
-		ClientID:     os.Getenv("AUTH_GITHUB_KEY"),
-		ClientSecret: os.Getenv("AUTH_GITHUB_SECRET"),
-		Scopes:       []string{"read:user"},
-		Endpoint:     github.Endpoint,
-	}
-	return &authbase{
-		conf: conf,
-		// Redirect user to consent page to ask for permission
-		// for the scopes specified above.
-		URL: conf.AuthCodeURL("state", oauth2.AccessTypeOnline),
-	}
-}
+type authbase struct{}
 
 func (a *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
-	type Auth struct {
-		User    User
-		AuthURL string
-	}
-	if path.Base(r.URL.Path) == "callback" {
-		query := r.URL.Query()
-		ctx := context.Background()
-		code := query.Get("code")
-		tok, err := a.auth.conf.Exchange(ctx, code)
-		if err != nil {
-			httpErr(rw, "while exchanging tokens", err, http.StatusInternalServerError)
+	var u User
+	query := r.URL.Query()
+	if query.Has("legajo") {
+		uid, err := strconv.ParseUint(query.Get("legajo"), 10, 64)
+		if err != nil || uid == 0 {
+			httpErr(rw, "legajo invalido", err, http.StatusBadRequest)
 			return
 		}
-		// We fetch user information. See https://docs.github.com/en/rest/guides/basics-of-authentication.
-		cl := a.auth.conf.Client(ctx, tok)
-		resp, err := cl.Get("https://api.github.com/user")
-		if err != nil {
-			httpErr(rw, "while accessing oauth2 provider API", err, http.StatusInternalServerError)
-			return
-		}
-		var auth Auth
-		err = json.NewDecoder(resp.Body).Decode(&auth.User)
-		if err != nil {
-			httpErr(rw, "decoding oauth2 provider API response", err, http.StatusInternalServerError)
-			return
-		}
-		setUserSession(rw, auth.User.Email)
-		http.Redirect(rw, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
-	u, err := getUserSession(r)
-	if err != nil {
-		log.Println(err)
+		u.ID = uid
+		a.auth.setUserSession(rw, u)
 	} else {
-		log.Println("got user ", u)
+		gotu, err := a.auth.getUserSession(r)
+		if err != nil {
+			log.Println(err)
+		} else {
+			log.Println("got user ", gotu)
+			u = gotu
+		}
 	}
-	err = a.tmpls.Lookup("auth.tmpl").Execute(rw, Auth{
-		AuthURL: a.auth.URL,
-		User:    u,
+	err := a.tmpls.Lookup("auth.tmpl").Execute(rw, struct{ User User }{
+		User: u,
 	})
 	if err != nil {
 		log.Println(err)
@@ -80,30 +39,33 @@ func (a *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
 }
 
 type User struct {
-	Email string
-	Login string
+	ID uint64
 }
 
-func setUserSession(rw http.ResponseWriter, email string) {
-	if email == "" {
-		return // Don't set empty cookie.
+func (a *authbase) setUserSession(rw http.ResponseWriter, u User) {
+	if u.ID == 0 {
+		return // Don't set zero value.
 	}
 	const hour = 60 * 60
 	cookie := &http.Cookie{
-		Name:    "user_email",
+		Name:    "user_id",
 		Path:    "/", // very important, or else path will be autoset to current path.
-		Value:   email,
+		Value:   strconv.FormatUint(u.ID, 10),
 		MaxAge:  3 * hour,
 		Expires: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	log.Printf("user %s logging in", email)
+	log.Printf("user %v logging in", u)
 	http.SetCookie(rw, cookie)
 }
 
-func getUserSession(r *http.Request) (User, error) {
-	c, err := r.Cookie("user_email")
+func (a *authbase) getUserSession(r *http.Request) (User, error) {
+	c, err := r.Cookie("user_id")
 	if err != nil {
 		return User{}, err
 	}
-	return User{Email: c.Value}, nil
+	v, err := strconv.ParseUint(c.Value, 10, 64)
+	if err == nil && v == 0 {
+		return User{}, errors.New("user ID must be non-zero")
+	}
+	return User{ID: v}, err
 }

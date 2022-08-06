@@ -1,7 +1,10 @@
 {{ template "header"}}
-{{if .User.Email}}
-<p>You are logged in as {{.User.Email}}</p>
+{{if .User.ID}}
+<p>You are logged in as {{.User.ID}}</p>
 {{else}}
-<a href="{{.AuthURL}}">Login</a>
+<form action="login">
+<label>Ingrese su legajo</label>
+<input placeholder="33333" name="legajo" type="text">
+</form>
 {{end}}
 {{template "footer"}}

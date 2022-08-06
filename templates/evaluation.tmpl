@@ -10,7 +10,7 @@
     </div>
 </div>
 {{ if .User }}
-<p>Estás resolviendo este ejercicio como <span style="color:green">{{.User.Email}}</span></p>
+<p>Estás resolviendo este ejercicio como <span style="color:green">{{.User.ID}}</span></p>
 {{end}}
 {{template "interpreter" .Eval}}
 
