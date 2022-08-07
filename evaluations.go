@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -101,7 +102,7 @@ func (sv *Server) ParseAndEvaluateGlob(pattern string) error {
 		}
 		evaluationMap[id] = eval
 	}
-	sv.eg = egroup
+	sv.eg = egroup // this is fine, egroup is discarded.
 	sv.evalmap = evaluationMap
 	return nil
 }
@@ -111,17 +112,17 @@ func (sv *Server) handleListEvaluations(rw http.ResponseWriter, r *http.Request)
 		sv.handleEvaluation(rw, r)
 		return
 	}
-	group := sv.eg
+	group := &sv.eg
 	urlPath := "/" + r.URL.Path
 	sv.eg.Walk(func(lvl int, path string, e *EvalGroup) error {
 		if path == urlPath {
-			group = *e
+			group = e
 			return errors.New("sentinel error")
 		}
 		return nil
 	})
 	sv.tmpls.Lookup("all_evaluations.tmpl").Execute(rw, struct {
-		Egroup EvalGroup
+		Egroup *EvalGroup
 	}{
 		Egroup: group,
 	})
@@ -153,12 +154,13 @@ func (sv *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 }
 
 type EvalGroup struct {
+	sync.RWMutex
 	Dir       string
 	Evals     []Evaluation
 	SubGroups []EvalGroup
 }
 
-func (eg EvalGroup) String() string {
+func (eg *EvalGroup) String() string {
 	return eg.Dir
 }
 
