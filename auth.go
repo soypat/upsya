@@ -61,7 +61,7 @@ func (a *authbase) setUserSession(rw http.ResponseWriter, u User) {
 func (a *authbase) getUserSession(r *http.Request) (User, error) {
 	c, err := r.Cookie("user_id")
 	if err != nil {
-		return User{}, err
+		return User{}, errors.New("user session not found")
 	}
 	v, err := strconv.ParseUint(c.Value, 10, 64)
 	if err == nil && v == 0 {

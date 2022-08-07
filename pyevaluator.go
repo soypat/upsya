@@ -49,8 +49,16 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		sv.httpErr(rw, "", err, http.StatusBadRequest)
 		return
 	}
+	// Check if user logged in.
+	user, err := sv.auth.getUserSession(r)
+	if err != nil {
+		json.NewEncoder(rw).Encode(struct{ Error, Output string }{
+			Error: "Authentication error. Please login again",
+		})
+		return
+	}
 	// Check if code has been submitted already.
-	hash := nchashStr(src.Code)
+	hash := nchashStr(src.Code) + user.ID
 	_, alreadySubmitted := sv.submitted[hash]
 	if alreadySubmitted {
 		json.NewEncoder(rw).Encode(struct{ Error, Output string }{
