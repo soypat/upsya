@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -78,7 +77,11 @@ func (sv *Server) ParseAndEvaluateGlob(pattern string) error {
 		if err != nil {
 			return fmt.Errorf("parsing file %s: %s", match, err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2000*time.Millisecond)
+		startupTimeout := 5000 * time.Millisecond
+		if debug {
+			startupTimeout = time.Hour
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), startupTimeout)
 		defer cancel()
 		eval.results = make([]string, len(strings.Split(eval.Stdin, "---")))
 		ej := evaluationJob{
@@ -154,7 +157,6 @@ func (sv *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 }
 
 type EvalGroup struct {
-	sync.RWMutex
 	Dir       string
 	Evals     []Evaluation
 	SubGroups []EvalGroup

@@ -1,10 +1,11 @@
 """
-Double or nothing
+<span class="badge bg-success">De prueba</span> Double or nothing
 ===
-Write a program that takes an input number from standard input,
-doubles it, and prints the result to console.
+Escriba un programa que duplique un número e imprima el resultado. 
+El número a duplicar se recibe por **entrada estándar**.
 
-Use the `input()` function and `int()` conversion.
+Use las funcion `input()` para receibir texto de entrada estándar 
+e `int()` para convertir el número.
 """
 print(2 * int(input()))
 """

@@ -1,6 +1,6 @@
 """
-Hello world
+<span class="badge bg-success">De prueba</span> Hello world
 ===
-Print the following text to console: `hello world!`
+Imprima el siguiente texto a consola: `hello world!`
 """
 print("hello world!")
