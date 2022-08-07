@@ -96,6 +96,7 @@ func run() error {
 		return err
 	}
 	server.kvdb = db
+	server.submitted = make(map[uint64]struct{})
 	// Set endpoints.
 	smux.Handle("/assets/", http.FileServer(http.FS(assetFS)))
 	smux.Handle("/py/evals/", http.StripPrefix("/py/evals/", http.HandlerFunc(server.handleListEvaluations)))

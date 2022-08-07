@@ -49,12 +49,24 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		sv.httpErr(rw, "", err, http.StatusBadRequest)
 		return
 	}
+	// Check if code has been submitted already.
+	hash := nchashStr(src.Code)
+	_, alreadySubmitted := sv.submitted[hash]
+	if alreadySubmitted {
+		json.NewEncoder(rw).Encode(struct{ Error, Output string }{
+			Error: "You can't submit two identical programs.",
+		})
+		return
+	}
+	sv.submitted[hash] = struct{}{}
+	// Check if python is "safe" for running.
 	if err := assertSafePython(src.Code); err != nil {
 		json.NewEncoder(rw).Encode(struct{ Error, Output string }{
 			Error: err.Error(),
 		})
 		return
 	}
+	// Prepare jail directory.
 	wd, err := sv.jail.Getwd()
 	if err != nil {
 		log.Println(err)
@@ -114,12 +126,12 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 	}{
 		Output:  string(output),
 		Elapsed: time.Since(start),
-		Error: (func(err error) string {
+		Error: func() string {
 			if err != nil {
 				return err.Error()
 			}
 			return ""
-		})(err),
+		}(),
 	}
 	json.NewEncoder(rw).Encode(result)
 }

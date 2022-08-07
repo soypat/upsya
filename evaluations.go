@@ -28,6 +28,8 @@ type Server struct {
 	tmpls *template.Template
 	auth  *authbase
 	kvdb  *bbolt.DB
+	// if code was already submitted recently, ignore.
+	submitted map[uint64]struct{}
 }
 
 func (sv *Server) ParseAndEvaluateGlob(pattern string) error {
