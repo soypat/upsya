@@ -238,7 +238,11 @@ type Evaluation struct {
 	Description string
 	Content     string
 	Stdin       string
-	Solution    string
+	// Text to hold the place of solution upon loading evaluation.
+	SolutionPlaceholder string
+	// Is added to all evaluation attempts after the provided solution.
+	SolutionSuffix string
+	Solution       string
 	// Results is the standard output of the solution for each of the
 	// standard input test cases.
 	results []string
@@ -249,17 +253,19 @@ func (e Evaluation) ID() (sum uint64) {
 }
 
 func (eval Evaluation) serialize(w io.Writer) (err error) {
-	const stdinPrefix = "Stdin cases:"
-	_, err = w.Write([]byte("\"\"\"\n" + eval.Title + "\n" + eval.Description + "\n===\n"))
-	if err != nil {
-		return err
-	}
-	_, err = w.Write([]byte(eval.Content + "\n\"\"\"\n" + eval.Solution))
-	if err != nil {
-		return err
-	}
-	if eval.Stdin != "" {
-		_, err = w.Write([]byte("\n\"\"\"\n" + stdinPrefix + "\n" + eval.Stdin + "\"\"\"\n"))
+	fmt.Fprintf(w, "\"\"\"\n%s\n%s\n===\n%s\n\"\"\"\n%s", eval.Title, eval.Description, eval.Content, eval.Solution)
+	if eval.Stdin != "" || eval.SolutionPlaceholder != "" {
+		fmt.Fprint(w, "\n\"\"\"\n")
+		if eval.SolutionPlaceholder != "" {
+			fmt.Fprintf(w, "Placeholder:\n%s", eval.SolutionPlaceholder)
+			if eval.Stdin != "" {
+				fmt.Fprintln(w, "===")
+			}
+		}
+		if eval.Stdin != "" {
+			fmt.Fprintf(w, "Stdin cases:\n%s\n", eval.Stdin)
+		}
+		fmt.Fprintf(w, "\n\"\"\"\n%s", eval.SolutionSuffix)
 	}
 	return err
 }
@@ -267,23 +273,17 @@ func (eval Evaluation) serialize(w io.Writer) (err error) {
 func parseEval(r io.Reader) (eval Evaluation, err error) {
 	const stdinPrefix = "Stdin cases:"
 	var s strings.Builder
+	s.WriteByte('\n')
 	_, err = io.Copy(&s, r)
 	if err != nil {
 		return eval, err
 	}
-	splits := strings.Split(strings.ReplaceAll(s.String(), "\r", ""), `"""`)
+	if strings.HasSuffix(s.String(), "\"\"\"") {
+		s.WriteByte('\n')
+	}
+	splits := strings.Split(strings.ReplaceAll(s.String(), "\r", ""), "\n\"\"\"\n")
 	if len(splits) < 3 {
 		return eval, errors.New("docstrings not found")
-	}
-	if len(splits) >= 4 {
-		splits[3] = strings.TrimLeft(splits[3], " \n")
-		if !strings.HasPrefix(splits[3], stdinPrefix) {
-			return eval, fmt.Errorf("second docstring must be input and start with %q", stdinPrefix)
-		}
-		eval.Stdin = strings.TrimSpace(strings.TrimPrefix(splits[3], stdinPrefix))
-		if strings.HasSuffix(splits[3], "\n") {
-			eval.Stdin += "\n" // if last line had a newline add it again.
-		}
 	}
 	wholeContent := splits[1]
 	eval.Solution = strings.TrimSpace(splits[2])
@@ -296,6 +296,25 @@ func parseEval(r io.Reader) (eval Evaluation, err error) {
 		if hasDesc {
 			eval.Description = strings.TrimSpace(description)
 		}
+	}
+	if len(splits) >= 5 {
+		fields := strings.Split(splits[3], "===\n")
+		for i := 0; i < len(fields); i++ {
+			field := fields[i]
+			switch {
+			case strings.HasPrefix(field, "Stdin cases:"):
+				eval.Stdin = strings.TrimSpace(strings.TrimPrefix(field, "Stdin cases:"))
+				if i == len(fields)-1 {
+					eval.Stdin += "\n" // last field has its newline eaten by Split
+				}
+			case strings.HasPrefix(field, "Placeholder:"):
+				eval.SolutionPlaceholder = strings.TrimSpace(strings.TrimPrefix(field, "Placeholder:"))
+				if i == len(fields)-1 {
+					eval.SolutionPlaceholder += "\n" // last field has its newline eaten by Split
+				}
+			}
+		}
+		eval.SolutionSuffix = splits[4]
 	}
 	return eval, nil
 }

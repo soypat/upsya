@@ -9,20 +9,25 @@ func TestEvaluation(t *testing.T) {
 	const stdinPrefix = "\nStdin cases:\n"
 	for _, e := range []Evaluation{
 		{
-			Title:       "\n MEga c \n ",
-			Description: "\n MEga c \n ",
-			Content:     "\n MEga c \n ",
-			Stdin:       "sa\nds\n",
-			Solution:    "\n MEga sadad\n",
+			Title:               "Title to the work",
+			Description:         "This is my Description",
+			Content:             "Content and more Content\nIt's content all the way down",
+			Stdin:               "sa\nds\nThis could be random text, must be perfectly preserved between serializations\n---\nOr else\n",
+			Solution:            "print(\"solve\")",
+			SolutionPlaceholder: "print(\"Hey now rock star\")\nprint(\"Get your game on hey now\")",
+			SolutionSuffix:      "print(\"Hey now star star\")\nprint(\"Get your star power on hey now\")\n",
 		},
 	} {
 		var ser strings.Builder
 		e.serialize(&ser)
-		parsed, err := parseEval(strings.NewReader(ser.String()))
+		serialized := ser.String()
+		t.Log(serialized)
+		parsed, err := parseEval(strings.NewReader(serialized))
 		if err != nil {
 			t.Error("parsing evaluation:", err)
 			continue
 		}
+		assertEvalEqual(t, e, parsed)
 		ser.Reset()
 		parsed.serialize(&ser)
 		reparsed, err := parseEval(strings.NewReader(ser.String()))
@@ -30,11 +35,11 @@ func TestEvaluation(t *testing.T) {
 			t.Error("reparsing evaluation:", err)
 			continue
 		}
-		assetEvalEqual(t, parsed, reparsed)
+		assertEvalEqual(t, parsed, reparsed)
 	}
 }
 
-func assetEvalEqual(t *testing.T, a, b Evaluation) {
+func assertEvalEqual(t *testing.T, a, b Evaluation) {
 	if a.Title != b.Title {
 		t.Error("title not equal")
 	}
@@ -42,12 +47,18 @@ func assetEvalEqual(t *testing.T, a, b Evaluation) {
 		t.Error("content not equal")
 	}
 	if a.Content != b.Content {
-		t.Errorf("content not equal\n%q\n%q", a.Content, b.Content)
+		t.Errorf("content not equal\n%q\n%q\n", a.Content, b.Content)
 	}
 	if a.Solution != b.Solution {
-		t.Errorf("solution not equal\n%q\n%q", a.Solution, b.Solution)
+		t.Errorf("solution not equal\n%q\n%q\n", a.Solution, b.Solution)
 	}
 	if a.Stdin != b.Stdin {
-		t.Errorf("stdin not equal\n%q\n%q", a.Stdin, b.Stdin)
+		t.Errorf("stdin not equal\n%q\n%q\n", a.Stdin, b.Stdin)
+	}
+	if a.SolutionPlaceholder != b.SolutionPlaceholder {
+		t.Errorf("solution placeholder not equal\n%q\n%q\n", a.SolutionPlaceholder, b.SolutionPlaceholder)
+	}
+	if a.SolutionSuffix != b.SolutionSuffix {
+		t.Errorf("solution suffix not equal\n%q\n%q\n", a.SolutionSuffix, b.SolutionSuffix)
 	}
 }

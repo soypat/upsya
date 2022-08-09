@@ -91,6 +91,7 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		sv.httpErr(rw, "creating program file", err, http.StatusInternalServerError)
 		return
 	}
+	defer fp.Close()
 	_, err = io.Copy(fp, strings.NewReader(src.Code))
 	if err != nil {
 		sv.httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
@@ -105,6 +106,7 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 					eval:     eval,
 					filename: fpath,
 				}
+				fmt.Fprintf(fp, "\n%s", eval.SolutionSuffix) // add suffix to code.
 				log.Println("running evaluation for", eid)
 				sv.evaluate(r.Context(), &ej)
 				json.NewEncoder(rw).Encode(ej)
