@@ -16,6 +16,7 @@ func TestEvaluation(t *testing.T) {
 			Solution:            "print(\"solve\")",
 			SolutionPlaceholder: "print(\"Hey now rock star\")\nprint(\"Get your game on hey now\")",
 			SolutionSuffix:      "print(\"Hey now star star\")\nprint(\"Get your star power on hey now\")\n",
+			SolutionPrefix:      "print(\"Hey star\")\nprint(\"prefix me this one\")\n",
 		},
 	} {
 		var ser strings.Builder

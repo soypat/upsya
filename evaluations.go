@@ -240,9 +240,11 @@ type Evaluation struct {
 	Stdin       string
 	// Text to hold the place of solution upon loading evaluation.
 	SolutionPlaceholder string
+	// Is added to all evaluation attempts before the provided solution.
+	SolutionPrefix string
+	Solution       string
 	// Is added to all evaluation attempts after the provided solution.
 	SolutionSuffix string
-	Solution       string
 	// Results is the standard output of the solution for each of the
 	// standard input test cases.
 	results []string
@@ -253,6 +255,9 @@ func (e Evaluation) ID() (sum uint64) {
 }
 
 func (eval Evaluation) serialize(w io.Writer) (err error) {
+	if eval.SolutionPrefix != "" {
+		fmt.Fprintf(w, "%s\n", eval.SolutionPrefix)
+	}
 	fmt.Fprintf(w, "\"\"\"\n%s\n%s\n===\n%s\n\"\"\"\n%s", eval.Title, eval.Description, eval.Content, eval.Solution)
 	if eval.Stdin != "" || eval.SolutionPlaceholder != "" {
 		fmt.Fprint(w, "\n\"\"\"\n")
@@ -271,7 +276,6 @@ func (eval Evaluation) serialize(w io.Writer) (err error) {
 }
 
 func parseEval(r io.Reader) (eval Evaluation, err error) {
-	const stdinPrefix = "Stdin cases:"
 	var s strings.Builder
 	s.WriteByte('\n')
 	_, err = io.Copy(&s, r)
@@ -285,6 +289,7 @@ func parseEval(r io.Reader) (eval Evaluation, err error) {
 	if len(splits) < 3 {
 		return eval, errors.New("docstrings not found")
 	}
+	eval.SolutionPrefix = strings.TrimPrefix(splits[0], "\n")
 	wholeContent := splits[1]
 	eval.Solution = strings.TrimSpace(splits[2])
 	frontmatter, content, hasFront := strings.Cut(wholeContent, "===")

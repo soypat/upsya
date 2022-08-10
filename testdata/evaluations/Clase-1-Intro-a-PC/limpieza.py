@@ -24,3 +24,9 @@ print(suma)
 print(true)
 print(x)
 print(y)
+"""
+Placeholder:
+True = 17a = b = la puerta azul está abierta
+x = 5, y = 10
+'suma' = 30
+"""

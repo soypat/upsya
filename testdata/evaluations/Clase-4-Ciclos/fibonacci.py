@@ -13,3 +13,10 @@ kcurr =1
 for i in range(100):
    print(kprev)
    kprev, kcurr = kcurr, kprev+kcurr
+
+"""
+Placeholder:
+k0 = 0
+k1 = 1
+# ...
+"""

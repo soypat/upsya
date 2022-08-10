@@ -9,6 +9,10 @@ e `int()` para convertir el número.
 """
 print(2 * int(input()))
 """
+Placeholder:
+numero = input()
+# numero es un string que contiene los datos ingresados por el usuario!
+===
 Stdin cases:
 -1
 ---

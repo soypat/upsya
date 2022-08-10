@@ -88,6 +88,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 	err = db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("evalresults"))
 		return err

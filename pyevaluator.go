@@ -92,11 +92,6 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer fp.Close()
-	_, err = io.Copy(fp, strings.NewReader(src.Code))
-	if err != nil {
-		sv.httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
-		return
-	}
 	eid, _ := strconv.ParseUint(src.EvaluationID, 10, 64)
 	if eid > 0 {
 		// Find evaluation if this is an evaluation.
@@ -106,7 +101,8 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 					eval:     eval,
 					filename: fpath,
 				}
-				fmt.Fprintf(fp, "\n%s", eval.SolutionSuffix) // add suffix to code.
+				// Generate file contents.
+				fmt.Fprintf(fp, "%s\n%s\n%s", eval.SolutionPrefix, src.Code, eval.SolutionSuffix)
 				log.Println("running evaluation for", eid)
 				sv.evaluate(r.Context(), &ej)
 				json.NewEncoder(rw).Encode(ej)
@@ -118,6 +114,11 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println("running interpreter")
+	_, err = io.Copy(fp, strings.NewReader(src.Code))
+	if err != nil {
+		sv.httpErr(rw, "copying code to file", err, http.StatusInternalServerError)
+		return
+	}
 	// Below is regular interpreter logic.
 	ctx, cancel := context.WithTimeout(r.Context(), pyTimeout)
 	defer cancel()
