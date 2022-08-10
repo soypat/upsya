@@ -57,6 +57,7 @@ func (sv *Server) handleRun(rw http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	src.UserID = user.ID // Set from cookie.
 	// Check if code has been submitted already.
 	hash := nchashStr(src.Code) + user.ID
 	_, alreadySubmitted := sv.submitted[hash]
