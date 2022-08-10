@@ -203,7 +203,7 @@ func (ev *Server) evaluate(ctx context.Context, job *evaluationJob) error {
 	if debug {
 		msg += "\n" + comparison
 	}
-	setJob(msg, errors.New("Did not pass all cases"))
+	setJob(msg, errors.New("did not pass all cases"))
 	return nil
 }
 
@@ -242,6 +242,33 @@ func (sv *Server) saveEvaluationResult(src PyUserInput, job evaluationJob) {
 	})
 	if err != nil {
 		log.Printf("error saving evaluation: %v", err)
+	}
+}
+
+func (sv *Server) downloadKVDB(rw http.ResponseWriter, r *http.Request) {
+	u, err := sv.auth.getUserSession(r)
+	if err != nil || !u.IsAdmin() {
+		sv.httpErr(rw, "Not found", err, 404)
+		return
+	}
+	tx, err := sv.kvdb.Begin(false)
+	if err != nil {
+		sv.httpErr(rw, "could not begin transaction to write DB", err, http.StatusInternalServerError)
+		return
+	}
+	var b bytes.Buffer
+	n, err := tx.WriteTo(&b)
+	if err != nil {
+		sv.httpErr(rw, "during DB buffer out", err, http.StatusInternalServerError)
+		return
+	}
+	rw.Header().Set("Content-Type", "applications/octet-stream")
+	rw.Header().Set("Content-Disposition", "attachment;filename=\"upsya_kvdb.bbolt\"")
+	rw.Header().Set("Content-Length", strconv.FormatInt(n, 10))
+	_, err = io.Copy(rw, &b)
+	if err != nil {
+		sv.httpErr(rw, "during DB write out to network", err, http.StatusInternalServerError)
+		return
 	}
 }
 

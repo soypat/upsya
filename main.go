@@ -54,7 +54,7 @@ func run() error {
 	if debug {
 		log.Println("debug mode enabled")
 	}
-	smux := http.NewServeMux()
+
 	tmpl, err := template.New("base").Funcs(funcmap).ParseFS(templateFS, "templates/*.tmpl")
 	if err != nil {
 		return err
@@ -99,6 +99,8 @@ func run() error {
 	server.kvdb = db
 	server.submitted = make(map[uint64]struct{})
 	// Set endpoints.
+	smux := http.NewServeMux()
+	smux.HandleFunc("/admin/database/dlsnapshot", server.downloadKVDB)
 	smux.Handle("/assets/", http.FileServer(http.FS(assetFS)))
 	smux.Handle("/py/evals/", http.StripPrefix("/py/evals/", http.HandlerFunc(server.handleListEvaluations)))
 	smux.HandleFunc("/py/run/", server.handleRun)
@@ -106,7 +108,6 @@ func run() error {
 		http.Redirect(w, r, "/py/evals/", http.StatusTemporaryRedirect)
 	})
 	smux.HandleFunc("/auth/", server.handleAuth)
-
 	// Wrapping middleware for all http requests.
 	sv := userMiddleware(smux)
 	log.Println("Server started at http://127.0.0.1" + addr)

