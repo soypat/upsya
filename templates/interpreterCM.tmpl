@@ -1,7 +1,7 @@
 {{/* 
     Optionally receives an Evaluation (non pointer) as first and only argument.
 */}}
-{{ define "interpreterLegacy" -}}
+{{ define "interpreter" -}}
 <form id="interpreter" method="POST" enctype="multipart/form-data">
     <!--csrf()-->
     {{if ne .Title "" }}
@@ -20,8 +20,7 @@
             <div class="col-3" id="elapsed"></div>
         </div>
         <div id="wrap" class="row">
-        <textarea itemprop="description" rows="16" class="lined"  id="code" name="Code"
-              autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="false">{{ .SolutionPlaceholder }}</textarea>
+        <textarea name="Code" id="editor">{{ .SolutionPlaceholder }}</textarea>
         </div>
         <div class="row" id="wrap">
             <textarea class="lined col-sm-12" rows="10" id="output" disabled></textarea>
@@ -31,14 +30,20 @@
 
 <script src="{{ assetPath "js/jquery-linedtextarea.js" }}"></script>
 <script defer>
-$('#code').linedtextarea();
+codeID = document.querySelector("#editor");
+var myCodeMirror = CodeMirror.fromTextArea(codeID, {
+    lineNumbers: true,
+    mode: "python",
+    theme: "material"
+});
+
+// $('#code').linedtextarea();
 runID = document.querySelector("#run");
-codeID = document.querySelector("#code");
 outputID = document.querySelector("#output");
 elapsedID = document.querySelector("#elapsed");
 codeID.setAttribute("wrap","off")
 outputID.setAttribute("wrap","off")
-$(`.linedwrap`).attr("class","linedtextarea")
+// $(`.linedwrap`).attr("class","linedtextarea")
 
 function extractLineNo(stringy) {
     let cap = /line (\d+)/g.exec(stringy)
@@ -91,21 +96,21 @@ function onResponse(rjson) {
     outputID.innerHTML = rjson.Output.replace("File ", "Error on");
 }
 
-$(document).delegate('#code', 'keydown', function (e) {
-    var keyCode = e.keyCode || e.which;
-    if (keyCode == 9) {
-        e.preventDefault();
-        var start = this.selectionStart;
-        var end = this.selectionEnd;
-        var tab = `   `
-        // set textarea value to: text before caret + tab + text after caret
-        $(this).val($(this).val().substring(0, start)
-            + tab
-            + $(this).val().substring(end));
-        // put caret at right position again
-        this.selectionStart =
-            this.selectionEnd = start + tab.length;
-    }
-});
+// $(document).delegate('#code', 'keydown', function (e) {
+//     var keyCode = e.keyCode || e.which;
+//     if (keyCode == 9) {
+//         e.preventDefault();
+//         var start = this.selectionStart;
+//         var end = this.selectionEnd;
+//         var tab = `   `
+//         // set textarea value to: text before caret + tab + text after caret
+//         $(this).val($(this).val().substring(0, start)
+//             + tab
+//             + $(this).val().substring(end));
+//         // put caret at right position again
+//         this.selectionStart =
+//             this.selectionEnd = start + tab.length;
+//     }
+// });
 </script>
 {{- end}}

@@ -143,7 +143,11 @@ func (sv *Server) handleEvaluation(rw http.ResponseWriter, r *http.Request) {
 		sv.httpErr(rw, "evaluation "+num+" not found", nil, http.StatusBadRequest)
 		return
 	}
-	u, _ := sv.auth.getUserSession(r)
+	u, err := sv.auth.getUserSession(r)
+	if err != nil {
+		sv.httpErr(rw, "you must be logged in to view this page", err, http.StatusNetworkAuthenticationRequired)
+		return
+	}
 	err = sv.tmpls.Lookup("evaluation.tmpl").Execute(rw, struct {
 		Eval Evaluation
 		User User

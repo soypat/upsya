@@ -79,5 +79,8 @@ func (a *authbase) getUserSession(r *http.Request) (User, error) {
 	if err == nil && v == 0 {
 		return User{}, errors.New("user ID must be non-zero")
 	}
+	if debug {
+		log.Printf("user session %v auth success", v)
+	}
 	return User{ID: v}, err
 }
